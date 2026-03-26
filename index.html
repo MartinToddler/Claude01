@@ -425,20 +425,20 @@
     </div>
 
     <div class="percent-row">
-      <span class="percent-name">Rabat na fakturze</span>
+      <span class="percent-name" style="min-width:185px;white-space:nowrap;">Rabat na fakturze</span>
       <div class="stepper accent-rose" id="stepperRabFak">
         <button class="step-btn" data-dir="-1">−</button>
-        <input type="number" class="step-input" id="rabFakNum" value="0.00" min="0" max="99.9" step="0.05" />
+        <input type="number" class="step-input" id="rabFakNum" value="0.00" min="0" max="99" step="1" />
         <button class="step-btn" data-dir="1">+</button>
       </div>
       <span class="pct-sign">%</span>
     </div>
 
     <div class="percent-row">
-      <span class="percent-name">Rabat retro (poumowny)</span>
+      <span class="percent-name" style="min-width:185px;white-space:nowrap;">Rabat retro (poumowny)</span>
       <div class="stepper accent-rose" id="stepperRabRetro">
         <button class="step-btn" data-dir="-1">−</button>
-        <input type="number" class="step-input" id="rabRetroNum" value="0.00" min="0" max="99.9" step="0.05" />
+        <input type="number" class="step-input" id="rabRetroNum" value="0.00" min="0" max="99" step="1" />
         <button class="step-btn" data-dir="1">+</button>
       </div>
       <span class="pct-sign">%</span>
@@ -615,8 +615,8 @@
   makeStepper('stepperMat',      'matPctNum',   { min: 0.05, max: 99.9, step: 0.05, onChange: calculate });
   makeStepper('stepperLabour',   'labourNum',   { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
   makeStepper('stepperOther',    'otherNum',    { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
-  makeStepper('stepperRabFak',   'rabFakNum',   { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
-  makeStepper('stepperRabRetro', 'rabRetroNum', { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperRabFak',   'rabFakNum',   { min: 0, max: 99, step: 1, onChange: calculate });
+  makeStepper('stepperRabRetro', 'rabRetroNum', { min: 0, max: 99, step: 1, onChange: calculate });
   makeStepper('stepperCoeff',    'revCoeffNum', { min: 1.01, max: 99,   step: 0.05, onChange: calculateReverse });
 
   document.getElementById('material').addEventListener('input', calculate);
