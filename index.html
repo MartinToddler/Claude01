@@ -130,6 +130,9 @@
     .stepper.accent-amber { border-color: rgba(245,158,11,0.3); }
     .stepper.accent-violet { border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.05); }
     .stepper.accent-yellow { border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.04); }
+    .stepper.accent-rose   { border-color: rgba(251,113,133,0.3); background: rgba(251,113,133,0.04); }
+    .stepper.accent-rose .step-btn:hover { color: #fb7185; }
+    .stepper.accent-rose .step-input { color: #fda4af; }
 
     .step-btn {
       width: 36px;
@@ -414,6 +417,34 @@
     </div>
   </div>
 
+  <!-- Rabaty -->
+  <div class="card" style="border-color:rgba(251,113,133,0.2);">
+    <div class="card-header">
+      <div class="card-title">Rabaty dla klienta</div>
+      <span style="font-size:0.72rem;color:#64748b;">cena netto po rabacie → cena przed rabatem</span>
+    </div>
+
+    <div class="percent-row">
+      <span class="percent-name">Rabat na fakturze</span>
+      <div class="stepper accent-rose" id="stepperRabFak">
+        <button class="step-btn" data-dir="-1">−</button>
+        <input type="number" class="step-input" id="rabFakNum" value="0.00" min="0" max="99.9" step="0.05" />
+        <button class="step-btn" data-dir="1">+</button>
+      </div>
+      <span class="pct-sign">%</span>
+    </div>
+
+    <div class="percent-row">
+      <span class="percent-name">Rabat retro (poumowny)</span>
+      <div class="stepper accent-rose" id="stepperRabRetro">
+        <button class="step-btn" data-dir="-1">−</button>
+        <input type="number" class="step-input" id="rabRetroNum" value="0.00" min="0" max="99.9" step="0.05" />
+        <button class="step-btn" data-dir="1">+</button>
+      </div>
+      <span class="pct-sign">%</span>
+    </div>
+  </div>
+
   <!-- Ostrzeżenie -->
   <div class="warning" id="warning"></div>
 
@@ -432,6 +463,11 @@
       <div class="result-item">
         <div class="result-label">Marża procentowa</div>
         <div class="result-value" id="resMarginPct">—</div>
+      </div>
+      <div class="result-item" style="grid-column:1/-1;background:rgba(251,113,133,0.1);border-color:rgba(251,113,133,0.3);">
+        <div class="result-label" style="color:#9f4450;">Cena przed rabatem <span style="font-size:0.65rem;background:rgba(251,113,133,0.15);color:#fb7185;border:1px solid rgba(251,113,133,0.3);border-radius:4px;padding:0.1rem 0.35rem;margin-left:0.3rem;">cena katalogowa / ofertowa</span></div>
+        <div class="result-value" style="color:#fda4af;" id="resGrossPrice">—</div>
+        <div style="font-size:0.75rem;color:#6b3540;margin-top:0.25rem;" id="resDiscountInfo"></div>
       </div>
       <div class="result-item coeff" style="grid-column: 1 / -1;">
         <div class="result-label">Współczynnik materiału &nbsp;<span style="font-size:0.65rem;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:4px;padding:0.1rem 0.35rem;">cena = materiał × współczynnik</span></div>
@@ -576,10 +612,12 @@
   }
 
   /* ── Wire up main steppers ───────────────────────────────────────── */
-  makeStepper('stepperMat',    'matPctNum',  { min: 0.05, max: 99.9, step: 0.05, onChange: calculate });
-  makeStepper('stepperLabour', 'labourNum',  { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
-  makeStepper('stepperOther',  'otherNum',   { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
-  makeStepper('stepperCoeff',  'revCoeffNum',{ min: 1.01, max: 99,   step: 0.05, onChange: calculateReverse });
+  makeStepper('stepperMat',      'matPctNum',   { min: 0.05, max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperLabour',   'labourNum',   { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperOther',    'otherNum',    { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperRabFak',   'rabFakNum',   { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperRabRetro', 'rabRetroNum', { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperCoeff',    'revCoeffNum', { min: 1.01, max: 99,   step: 0.05, onChange: calculateReverse });
 
   document.getElementById('material').addEventListener('input', calculate);
   document.getElementById('revMaterial').addEventListener('input', calculateReverse);
@@ -592,9 +630,10 @@
   }
 
   function clearResults() {
-    ['resPrice','resMarginPLN','resMarginPct','resLabour','resOther','resCoeff'].forEach(id => {
+    ['resPrice','resMarginPLN','resMarginPct','resLabour','resOther','resCoeff','resGrossPrice'].forEach(id => {
       document.getElementById(id).textContent = '—';
     });
+    document.getElementById('resDiscountInfo').textContent = '';
     ['barMaterial','barLabour','barOther','barMargin'].forEach(id => setBar(id, 0));
   }
 
@@ -639,12 +678,22 @@
     const marginPLN    = sellingPrice * marginPct / 100;
     const coeff        = 100 / matPct;
 
+    const rabFak   = parseFloat(document.getElementById('rabFakNum').value)   || 0;
+    const rabRetro = parseFloat(document.getElementById('rabRetroNum').value) || 0;
+    const grossPrice    = sellingPrice / ((1 - rabFak / 100) * (1 - rabRetro / 100));
+    const effectiveDisc = round2(100 * (1 - sellingPrice / grossPrice));
+
     document.getElementById('resPrice').textContent     = fmt(sellingPrice) + ' PLN';
     document.getElementById('resMarginPLN').textContent = fmt(marginPLN)    + ' PLN';
     document.getElementById('resMarginPct').textContent = fmtPct(marginPct);
     document.getElementById('resLabour').textContent    = fmt(labourCost)   + ' PLN';
     document.getElementById('resOther').textContent     = fmt(otherCost)    + ' PLN';
     document.getElementById('resCoeff').textContent     = coeff.toFixed(4).replace('.', ',');
+    document.getElementById('resGrossPrice').textContent = fmt(grossPrice) + ' PLN';
+    document.getElementById('resDiscountInfo').textContent =
+      (rabFak > 0 || rabRetro > 0)
+        ? `Rabat na fakturze ${fmtPct(rabFak)} + retro ${fmtPct(rabRetro)} = łącznie ${fmtPct(effectiveDisc)} efektywnego rabatu`
+        : 'Brak rabatów — cena katalogowa = cena netto';
 
     setBar('barMaterial', matPct);
     setBar('barLabour',   labourPct);
