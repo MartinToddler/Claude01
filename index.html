@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kalkulator Marży</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem 1rem;
+      color: #e2e8f0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 680px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Material cost field */
+    .material-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 0.6rem 1rem;
+      transition: border-color 0.2s;
+    }
+    .material-input-wrap:focus-within {
+      border-color: #60a5fa;
+    }
+    .currency {
+      font-size: 1.1rem;
+      color: #94a3b8;
+      user-select: none;
+    }
+    #material {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #fff;
+      width: 100%;
+    }
+    #material::placeholder { color: #475569; font-weight: 400; }
+
+    /* Percent rows */
+    .percent-row {
+      margin-bottom: 1.1rem;
+    }
+    .percent-row:last-child { margin-bottom: 0; }
+
+    .percent-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .percent-name {
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+    .percent-value-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .percent-number {
+      width: 56px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 7px;
+      padding: 0.25rem 0.4rem;
+      text-align: right;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .percent-number:focus { border-color: #60a5fa; }
+    .percent-sign { color: #94a3b8; font-size: 0.9rem; }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.1);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #60a5fa;
+      cursor: pointer;
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.25);
+      transition: transform 0.15s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+    input[type="range"]::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #60a5fa; cursor: pointer; border: none;
+    }
+
+    /* Slider color accent per category */
+    .row-labour   input[type="range"] { accent-color: #34d399; }
+    .row-labour   input[type="range"]::-webkit-slider-thumb { background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,0.25); }
+    .row-overhead input[type="range"] { accent-color: #f59e0b; }
+    .row-overhead input[type="range"]::-webkit-slider-thumb { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.25); }
+    .row-margin   input[type="range"] { accent-color: #a78bfa; }
+    .row-margin   input[type="range"]::-webkit-slider-thumb { background: #a78bfa; box-shadow: 0 0 0 3px rgba(167,139,250,0.25); }
+
+    /* Warning */
+    .warning {
+      display: none;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.35);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      color: #fca5a5;
+      margin-bottom: 1.25rem;
+    }
+    .warning.visible { display: block; }
+
+    /* Results */
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .result-item {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+    .result-item.highlight {
+      background: rgba(96,165,250,0.12);
+      border-color: rgba(96,165,250,0.3);
+    }
+    .result-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #64748b;
+      margin-bottom: 0.35rem;
+    }
+    .result-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .result-item.highlight .result-value { color: #93c5fd; }
+
+    /* Cost breakdown */
+    .breakdown {
+      margin-top: 1.25rem;
+    }
+    .breakdown-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #64748b;
+      margin-bottom: 0.75rem;
+    }
+    .breakdown-bar {
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      height: 28px;
+      margin-bottom: 0.75rem;
+    }
+    .bar-segment {
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: rgba(0,0,0,0.7);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .seg-material { background: #60a5fa; }
+    .seg-labour   { background: #34d399; }
+    .seg-overhead { background: #f59e0b; }
+    .seg-margin   { background: #a78bfa; }
+
+    .breakdown-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .legend-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 480px) {
+      .results-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Kalkulator Marży</h1>
+  <p class="subtitle">Oblicz cenę sprzedaży i marżę na podstawie struktury kosztów</p>
+
+  <!-- Koszt materiału -->
+  <div class="card">
+    <div class="card-title">Koszt materiału</div>
+    <div class="material-input-wrap">
+      <span class="currency">PLN</span>
+      <input type="number" id="material" placeholder="0.00" min="0" step="0.01" value="100" />
+    </div>
+  </div>
+
+  <!-- Struktura kosztów -->
+  <div class="card">
+    <div class="card-title">Struktura kosztów firmowych</div>
+
+    <div class="percent-row row-labour">
+      <div class="percent-label-row">
+        <span class="percent-name">Robocizna</span>
+        <div class="percent-value-wrap">
+          <input type="number" class="percent-number" id="labourNum" min="0" max="100" step="0.5" value="20" />
+          <span class="percent-sign">%</span>
+        </div>
+      </div>
+      <input type="range" id="labourRange" min="0" max="100" step="0.5" value="20" />
+    </div>
+
+    <div class="percent-row row-overhead">
+      <div class="percent-label-row">
+        <span class="percent-name">Koszty stałe / Overhead</span>
+        <div class="percent-value-wrap">
+          <input type="number" class="percent-number" id="overheadNum" min="0" max="100" step="0.5" value="15" />
+          <span class="percent-sign">%</span>
+        </div>
+      </div>
+      <input type="range" id="overheadRange" min="0" max="100" step="0.5" value="15" />
+    </div>
+
+    <div class="percent-row row-margin">
+      <div class="percent-label-row">
+        <span class="percent-name">Pożądana marża</span>
+        <div class="percent-value-wrap">
+          <input type="number" class="percent-number" id="marginNum" min="0" max="99" step="0.5" value="30" />
+          <span class="percent-sign">%</span>
+        </div>
+      </div>
+      <input type="range" id="marginRange" min="0" max="99" step="0.5" value="30" />
+    </div>
+  </div>
+
+  <!-- Ostrzeżenie -->
+  <div class="warning" id="warning">
+    ⚠️ Łączny koszt (robocizna + overhead) wyrażony procentowo w stosunku do kosztu materiału jest bardzo wysoki.
+    Sprawdź poprawność danych wejściowych.
+  </div>
+
+  <!-- Wyniki -->
+  <div class="card">
+    <div class="card-title">Wyniki kalkulacji</div>
+    <div class="results-grid">
+      <div class="result-item highlight" style="grid-column: 1 / -1;">
+        <div class="result-label">Cena sprzedaży</div>
+        <div class="result-value" id="resPrice">—</div>
+      </div>
+      <div class="result-item">
+        <div class="result-label">Marża kwotowa</div>
+        <div class="result-value" id="resMarginPLN">—</div>
+      </div>
+      <div class="result-item">
+        <div class="result-label">Marża procentowa</div>
+        <div class="result-value" id="resMarginPct">—</div>
+      </div>
+    </div>
+
+    <div class="breakdown">
+      <div class="breakdown-title">Struktura ceny sprzedaży</div>
+      <div class="breakdown-bar">
+        <div class="bar-segment seg-material" id="barMaterial"></div>
+        <div class="bar-segment seg-labour"   id="barLabour"></div>
+        <div class="bar-segment seg-overhead" id="barOverhead"></div>
+        <div class="bar-segment seg-margin"   id="barMargin"></div>
+      </div>
+      <div class="breakdown-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div><span id="legMaterial">Materiał</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div><span id="legLabour">Robocizna</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div><span id="legOverhead">Overhead</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div><span id="legMargin">Marża</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const fmt = (n) => new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  const fmtPct = (n) => new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(n) + '%';
+
+  // Sync sliders ↔ number inputs
+  function syncPair(rangeId, numId) {
+    const range = document.getElementById(rangeId);
+    const num   = document.getElementById(numId);
+    range.addEventListener('input', () => { num.value = range.value; calculate(); });
+    num.addEventListener('input',   () => {
+      let v = parseFloat(num.value);
+      if (isNaN(v)) return;
+      v = Math.min(Math.max(v, parseFloat(num.min || 0)), parseFloat(num.max || 100));
+      range.value = v;
+      calculate();
+    });
+  }
+
+  syncPair('labourRange',   'labourNum');
+  syncPair('overheadRange', 'overheadNum');
+  syncPair('marginRange',   'marginNum');
+  document.getElementById('material').addEventListener('input', calculate);
+
+  function calculate() {
+    const material = parseFloat(document.getElementById('material').value) || 0;
+    const labourPct   = parseFloat(document.getElementById('labourNum').value)   || 0;
+    const overheadPct = parseFloat(document.getElementById('overheadNum').value) || 0;
+    const marginPct   = parseFloat(document.getElementById('marginNum').value)   || 0;
+
+    const labourCost   = material * labourPct / 100;
+    const overheadCost = material * overheadPct / 100;
+    const totalCost    = material + labourCost + overheadCost;
+
+    const warning = document.getElementById('warning');
+    if (marginPct >= 100) {
+      document.getElementById('resPrice').textContent     = '—';
+      document.getElementById('resMarginPLN').textContent = '—';
+      document.getElementById('resMarginPct').textContent = '—';
+      warning.textContent = '⚠️ Pożądana marża nie może wynosić 100% — cena sprzedaży byłaby nieskończona.';
+      warning.classList.add('visible');
+      return;
+    }
+
+    const sellingPrice = totalCost / (1 - marginPct / 100);
+    const marginPLN    = sellingPrice - totalCost;
+    const marginReal   = (marginPLN / sellingPrice) * 100;
+
+    const highCost = (labourPct + overheadPct) > 200;
+    warning.textContent = '⚠️ Łączne koszty robocizny i overheadu przekraczają 200% kosztu materiału. Sprawdź poprawność danych.';
+    warning.classList.toggle('visible', highCost);
+
+    document.getElementById('resPrice').textContent     = material > 0 ? fmt(sellingPrice) + ' PLN' : '—';
+    document.getElementById('resMarginPLN').textContent = material > 0 ? fmt(marginPLN) + ' PLN'    : '—';
+    document.getElementById('resMarginPct').textContent = material > 0 ? fmtPct(marginReal)         : '—';
+
+    // Breakdown bar
+    if (material > 0 && sellingPrice > 0) {
+      const pMat  = (material     / sellingPrice) * 100;
+      const pLab  = (labourCost   / sellingPrice) * 100;
+      const pOvh  = (overheadCost / sellingPrice) * 100;
+      const pMar  = (marginPLN    / sellingPrice) * 100;
+
+      setBar('barMaterial', pMat);
+      setBar('barLabour',   pLab);
+      setBar('barOverhead', pOvh);
+      setBar('barMargin',   pMar);
+
+      document.getElementById('legMaterial').textContent = `Materiał ${fmtPct(pMat)}`;
+      document.getElementById('legLabour').textContent   = `Robocizna ${fmtPct(pLab)}`;
+      document.getElementById('legOverhead').textContent = `Overhead ${fmtPct(pOvh)}`;
+      document.getElementById('legMargin').textContent   = `Marża ${fmtPct(pMar)}`;
+    }
+  }
+
+  function setBar(id, pct) {
+    const el = document.getElementById(id);
+    el.style.width = pct.toFixed(2) + '%';
+    el.textContent = pct > 8 ? pct.toFixed(1) + '%' : '';
+  }
+
+  calculate();
+</script>
+</body>
+</html>
