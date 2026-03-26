@@ -82,7 +82,7 @@
     }
     .material-input-wrap:focus-within { border-color: #60a5fa; }
     .currency { font-size: 1.1rem; color: #94a3b8; user-select: none; }
-    #material {
+    #material, #revMaterial {
       flex: 1;
       background: transparent;
       border: none;
@@ -92,99 +92,115 @@
       color: #fff;
       width: 100%;
     }
-    #material::placeholder { color: #475569; font-weight: 400; }
+    #revMaterial { font-size: 1.1rem; }
+    #material::placeholder, #revMaterial::placeholder { color: #475569; font-weight: 400; }
 
     /* Percent rows */
-    .percent-row { margin-bottom: 1.1rem; }
-    .percent-row:last-child { margin-bottom: 0; }
-
-    .percent-label-row {
+    .percent-row {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.5rem;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .percent-name { font-size: 0.95rem; color: #cbd5e1; }
-    .percent-value-wrap { display: flex; align-items: center; gap: 0.3rem; }
-    .percent-number {
-      width: 62px;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 7px;
-      padding: 0.25rem 0.4rem;
-      text-align: right;
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #fff;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .percent-number:focus { border-color: #60a5fa; }
-    .percent-number[readonly] {
-      background: rgba(167,139,250,0.12);
-      border-color: rgba(167,139,250,0.3);
-      color: #c4b5fd;
-      cursor: default;
-    }
-    .percent-sign { color: #94a3b8; font-size: 0.9rem; }
+    .percent-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .percent-row:first-of-type { padding-top: 0; }
 
-    /* Margin row (read-only) special style */
+    .percent-name {
+      font-size: 0.95rem;
+      color: #cbd5e1;
+      min-width: 140px;
+    }
     .row-margin .percent-name { color: #c4b5fd; }
-    .row-margin .auto-tag {
-      font-size: 0.65rem;
+
+    /* Stepper control */
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .stepper.accent-blue  { border-color: rgba(96,165,250,0.3); }
+    .stepper.accent-green { border-color: rgba(52,211,153,0.3); }
+    .stepper.accent-amber { border-color: rgba(245,158,11,0.3); }
+    .stepper.accent-violet { border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.05); }
+    .stepper.accent-yellow { border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.04); }
+
+    .step-btn {
+      width: 36px;
+      height: 40px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 1.2rem;
+      font-weight: 300;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      flex-shrink: 0;
+    }
+    .step-btn:hover  { background: rgba(255,255,255,0.08); color: #fff; }
+    .step-btn:active { background: rgba(255,255,255,0.15); }
+
+    .stepper.accent-blue  .step-btn:hover { color: #60a5fa; }
+    .stepper.accent-green .step-btn:hover { color: #34d399; }
+    .stepper.accent-amber .step-btn:hover { color: #f59e0b; }
+    .stepper.accent-violet .step-btn:hover { color: #a78bfa; }
+    .stepper.accent-yellow .step-btn:hover { color: #fbbf24; }
+
+    .step-input {
+      width: 58px;
+      background: transparent;
+      border: none;
+      border-left: 1px solid rgba(255,255,255,0.08);
+      border-right: 1px solid rgba(255,255,255,0.08);
+      outline: none;
+      text-align: center;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      padding: 0.25rem 0.2rem;
+      height: 40px;
+      -moz-appearance: textfield;
+    }
+    .step-input::-webkit-outer-spin-button,
+    .step-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+    .stepper.accent-blue   .step-input { color: #93c5fd; }
+    .stepper.accent-green  .step-input { color: #6ee7b7; }
+    .stepper.accent-amber  .step-input { color: #fcd34d; }
+    .stepper.accent-violet .step-input { color: #c4b5fd; }
+    .stepper.accent-yellow .step-input { color: #fbbf24; }
+
+    .step-input[readonly] { cursor: default; }
+
+    .pct-sign {
+      font-size: 0.8rem;
+      color: #64748b;
+      padding: 0 0.5rem 0 0.1rem;
+      flex-shrink: 0;
+    }
+
+    /* Auto-tag */
+    .auto-tag {
+      font-size: 0.6rem;
       background: rgba(167,139,250,0.2);
       color: #c4b5fd;
       border: 1px solid rgba(167,139,250,0.35);
       border-radius: 4px;
-      padding: 0.1rem 0.35rem;
-      margin-left: 0.4rem;
+      padding: 0.1rem 0.3rem;
+      margin-left: 0.35rem;
       vertical-align: middle;
-    }
-
-    input[type="range"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 6px;
-      border-radius: 3px;
-      background: rgba(255,255,255,0.1);
-      outline: none;
-      cursor: pointer;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      background: #60a5fa;
-      cursor: pointer;
-      box-shadow: 0 0 0 3px rgba(96,165,250,0.25);
-      transition: transform 0.15s;
-    }
-    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
-    input[type="range"]::-moz-range-thumb {
-      width: 18px; height: 18px; border-radius: 50%;
-      background: #60a5fa; cursor: pointer; border: none;
-    }
-
-    /* Slider color accents */
-    .row-material input[type="range"]::-webkit-slider-thumb { background: #60a5fa; }
-    .row-labour   input[type="range"]::-webkit-slider-thumb { background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,0.25); }
-    .row-other    input[type="range"]::-webkit-slider-thumb { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.25); }
-
-    /* Margin visual bar (read-only) */
-    .margin-bar-wrap {
-      width: 100%;
-      height: 6px;
-      border-radius: 3px;
-      background: rgba(255,255,255,0.1);
-      margin-top: 0.5rem;
-      overflow: hidden;
-    }
-    .margin-bar-fill {
-      height: 100%;
-      border-radius: 3px;
-      background: #a78bfa;
-      transition: width 0.25s ease;
     }
 
     /* Warning */
@@ -217,6 +233,10 @@
       background: rgba(96,165,250,0.12);
       border-color: rgba(96,165,250,0.3);
     }
+    .result-item.coeff {
+      background: rgba(251,191,36,0.1);
+      border-color: rgba(251,191,36,0.3);
+    }
     .result-label {
       font-size: 0.72rem;
       text-transform: uppercase;
@@ -230,83 +250,8 @@
       color: #fff;
     }
     .result-item.highlight .result-value { color: #93c5fd; }
-    .result-sub {
-      font-size: 0.72rem;
-      color: #475569;
-      margin-top: 0.2rem;
-    }
-
-    /* Coefficient highlight */
-    .result-item.coeff {
-      background: rgba(251,191,36,0.1);
-      border-color: rgba(251,191,36,0.3);
-    }
     .result-item.coeff .result-value { color: #fbbf24; font-size: 1.6rem; }
     .result-item.coeff .result-label { color: #78716c; }
-
-    /* Reverse calculator */
-    .card.reverse { border-color: rgba(251,191,36,0.2); }
-    .card.reverse .card-title { color: #92400e; }
-    .rev-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-    .rev-badge {
-      font-size: 0.7rem; font-weight: 700;
-      background: rgba(251,191,36,0.15); color: #fbbf24;
-      border: 1px solid rgba(251,191,36,0.3);
-      border-radius: 20px; padding: 0.15rem 0.6rem;
-    }
-
-    /* Coefficient input row */
-    .coeff-row {
-      display: flex; align-items: center; gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-    .coeff-label { font-size: 0.85rem; color: #94a3b8; white-space: nowrap; }
-    .coeff-input {
-      width: 80px;
-      background: rgba(251,191,36,0.08);
-      border: 1px solid rgba(251,191,36,0.25);
-      border-radius: 8px;
-      padding: 0.35rem 0.5rem;
-      text-align: center;
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: #fbbf24;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .coeff-input:focus { border-color: #fbbf24; }
-    .coeff-eq { font-size: 0.9rem; color: #475569; }
-
-    .rev-results-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 0.75rem;
-      margin-top: 1rem;
-    }
-    .rev-result-item {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 0.75rem 1rem;
-      text-align: center;
-    }
-    .rev-result-item.hi {
-      background: rgba(167,139,250,0.1);
-      border-color: rgba(167,139,250,0.3);
-    }
-    .rev-result-item .result-label { margin-bottom: 0.25rem; }
-    .rev-result-item .result-value { font-size: 1.1rem; }
-    .rev-result-item.hi .result-value { color: #c4b5fd; }
-    .rev-note {
-      margin-top: 0.75rem;
-      font-size: 0.78rem;
-      color: #475569;
-      text-align: center;
-    }
-
-    @media (max-width: 540px) {
-      .rev-results-grid { grid-template-columns: 1fr 1fr; }
-    }
 
     /* Breakdown */
     .breakdown { margin-top: 1.25rem; }
@@ -354,6 +299,54 @@
     }
     .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
+    /* Reverse calculator */
+    .card.reverse { border-color: rgba(251,191,36,0.2); }
+    .rev-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .rev-badge {
+      font-size: 0.7rem; font-weight: 700;
+      background: rgba(251,191,36,0.15); color: #fbbf24;
+      border: 1px solid rgba(251,191,36,0.3);
+      border-radius: 20px; padding: 0.15rem 0.6rem;
+    }
+    .rev-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .rev-label { font-size: 0.85rem; color: #94a3b8; white-space: nowrap; min-width: 110px; }
+
+    .rev-results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .rev-result-item {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      text-align: center;
+    }
+    .rev-result-item.hi {
+      background: rgba(167,139,250,0.1);
+      border-color: rgba(167,139,250,0.3);
+    }
+    .rev-result-item .result-label { margin-bottom: 0.25rem; }
+    .rev-result-item .result-value { font-size: 1.1rem; }
+    .rev-result-item.hi .result-value { color: #c4b5fd; }
+    .rev-note {
+      margin-top: 0.75rem;
+      font-size: 0.78rem;
+      color: #475569;
+      text-align: center;
+    }
+
+    @media (max-width: 540px) {
+      .percent-name { min-width: 100px; font-size: 0.85rem; }
+      .rev-results-grid { grid-template-columns: 1fr 1fr; }
+    }
     @media (max-width: 480px) {
       .results-grid { grid-template-columns: 1fr; }
       h1 { font-size: 1.4rem; }
@@ -368,7 +361,7 @@
   <!-- Koszt materiału -->
   <div class="card">
     <div class="card-title">Koszt materiału (PLN)</div>
-    <div class="material-input-wrap">
+    <div class="material-input-wrap" style="margin-top:0.75rem;">
       <span class="currency">PLN</span>
       <input type="number" id="material" placeholder="0.00" min="0" step="0.01" value="100" />
     </div>
@@ -378,57 +371,46 @@
   <div class="card">
     <div class="card-header">
       <div class="card-title">Struktura kosztów (% obrotu)</div>
-      <div class="sum-badge err" id="sumBadge">Σ 0%</div>
+      <div class="sum-badge ok" id="sumBadge">Σ 100%</div>
     </div>
 
-    <!-- Materiał -->
-    <div class="percent-row row-material">
-      <div class="percent-label-row">
-        <span class="percent-name">Materiał</span>
-        <div class="percent-value-wrap">
-          <input type="number" class="percent-number" id="matPctNum" min="1" max="99" step="0.5" value="40" />
-          <span class="percent-sign">%</span>
-        </div>
+    <div class="percent-row">
+      <span class="percent-name">Materiał</span>
+      <div class="stepper accent-blue" id="stepperMat">
+        <button class="step-btn" data-dir="-1">−</button>
+        <input type="number" class="step-input" id="matPctNum" value="40" min="0.05" max="99.9" step="0.05" />
+        <button class="step-btn" data-dir="1">+</button>
       </div>
-      <input type="range" id="matPctRange" min="1" max="99" step="0.5" value="40" />
+      <span class="pct-sign">%</span>
     </div>
 
-    <!-- Robocizna -->
-    <div class="percent-row row-labour">
-      <div class="percent-label-row">
-        <span class="percent-name">Robocizna (płace)</span>
-        <div class="percent-value-wrap">
-          <input type="number" class="percent-number" id="labourNum" min="0" max="99" step="0.5" value="25" />
-          <span class="percent-sign">%</span>
-        </div>
+    <div class="percent-row">
+      <span class="percent-name">Robocizna (płace)</span>
+      <div class="stepper accent-green" id="stepperLabour">
+        <button class="step-btn" data-dir="-1">−</button>
+        <input type="number" class="step-input" id="labourNum" value="25" min="0" max="99.9" step="0.05" />
+        <button class="step-btn" data-dir="1">+</button>
       </div>
-      <input type="range" id="labourRange" min="0" max="99" step="0.5" value="25" />
+      <span class="pct-sign">%</span>
     </div>
 
-    <!-- Pozostałe koszty -->
-    <div class="percent-row row-other">
-      <div class="percent-label-row">
-        <span class="percent-name">Pozostałe koszty</span>
-        <div class="percent-value-wrap">
-          <input type="number" class="percent-number" id="otherNum" min="0" max="99" step="0.5" value="5" />
-          <span class="percent-sign">%</span>
-        </div>
+    <div class="percent-row">
+      <span class="percent-name">Pozostałe koszty</span>
+      <div class="stepper accent-amber" id="stepperOther">
+        <button class="step-btn" data-dir="-1">−</button>
+        <input type="number" class="step-input" id="otherNum" value="5" min="0" max="99.9" step="0.05" />
+        <button class="step-btn" data-dir="1">+</button>
       </div>
-      <input type="range" id="otherRange" min="0" max="99" step="0.5" value="5" />
+      <span class="pct-sign">%</span>
     </div>
 
-    <!-- Marża — auto -->
-    <div class="percent-row row-margin">
-      <div class="percent-label-row">
-        <span class="percent-name">Marża <span class="auto-tag">AUTO</span></span>
-        <div class="percent-value-wrap">
-          <input type="number" class="percent-number" id="marginDisplay" readonly tabindex="-1" value="30" />
-          <span class="percent-sign">%</span>
-        </div>
+    <div class="percent-row">
+      <span class="percent-name">Marża <span class="auto-tag">AUTO</span></span>
+      <div class="stepper accent-violet">
+        <input type="number" class="step-input" id="marginDisplay" value="30" readonly tabindex="-1"
+          style="width:80px;border:none;" />
       </div>
-      <div class="margin-bar-wrap">
-        <div class="margin-bar-fill" id="marginBarFill" style="width:30%"></div>
-      </div>
+      <span class="pct-sign">%</span>
     </div>
   </div>
 
@@ -481,30 +463,35 @@
       </div>
     </div>
   </div>
-  <!-- Kalkulator odwrotny: materiał × współczynnik → marża -->
+
+  <!-- Kalkulator odwrotny -->
   <div class="card reverse">
     <div class="rev-header">
       <div class="card-title">Kalkulator odwrotny</div>
-      <span class="rev-badge">materiał × współczynnik = marża</span>
+      <span class="rev-badge">materiał × współczynnik → marża</span>
     </div>
 
-    <div class="coeff-row">
-      <span class="coeff-label">Koszt materiału</span>
+    <div class="rev-row">
+      <span class="rev-label">Koszt materiału</span>
       <div class="material-input-wrap" style="flex:1;padding:0.4rem 0.75rem;">
         <span class="currency" style="font-size:0.9rem;">PLN</span>
-        <input type="number" id="revMaterial" placeholder="0.00" min="0" step="0.01" value="100"
-          style="font-size:1.1rem;" />
+        <input type="number" id="revMaterial" placeholder="0.00" min="0" step="0.01" value="100" />
       </div>
     </div>
 
-    <div class="coeff-row">
-      <span class="coeff-label">Współczynnik</span>
-      <input type="number" class="coeff-input" id="revCoeffNum" min="1.01" max="20" step="0.01" value="2.50" />
-      <input type="range" id="revCoeffRange" min="1.01" max="10" step="0.01" value="2.50" style="flex:1;" />
+    <div class="rev-row">
+      <span class="rev-label">Współczynnik</span>
+      <div class="stepper accent-yellow" id="stepperCoeff">
+        <button class="step-btn" data-dir="-1">−</button>
+        <input type="number" class="step-input" id="revCoeffNum" value="2.50" min="1.01" max="99" step="0.05"
+          style="width:68px;" />
+        <button class="step-btn" data-dir="1">+</button>
+      </div>
     </div>
-    <div style="font-size:0.78rem;color:#475569;margin-bottom:0.5rem;padding-left:0.25rem;">
-      Cena sprzedaży = materiał × <span id="revCoeffEq" style="color:#fbbf24;font-weight:700;">2,50</span>
-      &nbsp;|&nbsp; Struktura kosztów z kalkulatora głównego
+
+    <div style="font-size:0.78rem;color:#475569;margin-bottom:0.25rem;">
+      Cena = materiał × <span id="revCoeffEq" style="color:#fbbf24;font-weight:700;">2,50</span>
+      &nbsp;·&nbsp; Struktura kosztów z kalkulatora głównego
     </div>
 
     <div class="rev-results-grid">
@@ -527,26 +514,77 @@
 
 <script>
   const fmt    = n => new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-  const fmtPct = n => new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(n) + '%';
+  const fmtPct = n => new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + '%';
+  const round2 = n => Math.round(n * 100) / 100;
 
-  function syncPair(rangeId, numId) {
-    const range = document.getElementById(rangeId);
-    const num   = document.getElementById(numId);
-    range.addEventListener('input', () => { num.value = range.value; calculate(); });
-    num.addEventListener('input', () => {
-      let v = parseFloat(num.value);
-      if (isNaN(v)) return;
-      v = Math.min(Math.max(v, parseFloat(num.min || 0)), parseFloat(num.max || 99));
-      range.value = v;
-      calculate();
+  /* ── Stepper with hold-to-repeat + acceleration ─────────────────── */
+  function makeStepper(stepperId, inputId, { min = 0, max = 99.9, step = 0.05, onChange } = {}) {
+    const wrap  = document.getElementById(stepperId);
+    const input = document.getElementById(inputId);
+    let holdTimer = null;
+    let repeatTimer = null;
+    let holdStart = 0;
+
+    function getValue() { return parseFloat(input.value) || 0; }
+
+    function setValue(v) {
+      v = Math.round(v * 10000) / 10000;   // float safety
+      v = Math.min(max, Math.max(min, v));
+      input.value = v.toFixed(2);
+      onChange && onChange(v);
+    }
+
+    function step1(dir) {
+      const elapsed = Date.now() - holdStart;
+      // After 2s of holding: 10× bigger steps
+      const s = elapsed > 2000 ? step * 10 : step;
+      setValue(getValue() + dir * s);
+    }
+
+    function startHold(dir) {
+      holdStart = Date.now();
+      step1(dir);  // immediate first step
+      holdTimer = setTimeout(() => {
+        repeatTimer = setInterval(() => step1(dir), 80);
+      }, 380);
+    }
+
+    function stopHold() {
+      clearTimeout(holdTimer);
+      clearInterval(repeatTimer);
+      holdTimer = repeatTimer = null;
+    }
+
+    wrap.querySelectorAll('.step-btn').forEach(btn => {
+      const dir = parseInt(btn.dataset.dir);
+      btn.addEventListener('mousedown',  () => startHold(dir));
+      btn.addEventListener('touchstart', e => { e.preventDefault(); startHold(dir); }, { passive: false });
+    });
+
+    ['mouseup','mouseleave','touchend','touchcancel'].forEach(evt => {
+      document.addEventListener(evt, stopHold);
+    });
+
+    // Direct input
+    input.addEventListener('change', () => {
+      setValue(parseFloat(input.value) || 0);
+    });
+    input.addEventListener('input', () => {
+      const v = parseFloat(input.value);
+      if (!isNaN(v)) onChange && onChange(v);
     });
   }
 
-  syncPair('matPctRange', 'matPctNum');
-  syncPair('labourRange', 'labourNum');
-  syncPair('otherRange',  'otherNum');
-  document.getElementById('material').addEventListener('input', calculate);
+  /* ── Wire up main steppers ───────────────────────────────────────── */
+  makeStepper('stepperMat',    'matPctNum',  { min: 0.05, max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperLabour', 'labourNum',  { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperOther',  'otherNum',   { min: 0,    max: 99.9, step: 0.05, onChange: calculate });
+  makeStepper('stepperCoeff',  'revCoeffNum',{ min: 1.01, max: 99,   step: 0.05, onChange: calculateReverse });
 
+  document.getElementById('material').addEventListener('input', calculate);
+  document.getElementById('revMaterial').addEventListener('input', calculateReverse);
+
+  /* ── Bar helper ──────────────────────────────────────────────────── */
   function setBar(id, pct) {
     const el = document.getElementById(id);
     el.style.width = Math.max(0, pct).toFixed(2) + '%';
@@ -560,34 +598,29 @@
     ['barMaterial','barLabour','barOther','barMargin'].forEach(id => setBar(id, 0));
   }
 
+  /* ── Main calculator ─────────────────────────────────────────────── */
   function calculate() {
     const material  = parseFloat(document.getElementById('material').value) || 0;
     const matPct    = parseFloat(document.getElementById('matPctNum').value)  || 0;
     const labourPct = parseFloat(document.getElementById('labourNum').value)  || 0;
     const otherPct  = parseFloat(document.getElementById('otherNum').value)   || 0;
-    const marginPct = Math.round((100 - matPct - labourPct - otherPct) * 100) / 100;
+    const marginPct = round2(100 - matPct - labourPct - otherPct);
 
-    // Update auto margin display
-    document.getElementById('marginDisplay').value = marginPct.toFixed(1);
-    const mbFill = Math.max(0, Math.min(100, marginPct));
-    document.getElementById('marginBarFill').style.width = mbFill + '%';
+    document.getElementById('marginDisplay').value = marginPct.toFixed(2);
 
-    // Sum badge
-    const total = matPct + labourPct + otherPct + Math.max(0, marginPct);
     const sumBadge = document.getElementById('sumBadge');
-    sumBadge.textContent = 'Σ ' + (matPct + labourPct + otherPct).toFixed(1) + '%';
-
-    const warning = document.getElementById('warning');
+    const warning  = document.getElementById('warning');
 
     if (marginPct < 0) {
       sumBadge.className = 'sum-badge err';
-      warning.textContent = '⚠️ Suma materiału, robocizny i pozostałych kosztów przekracza 100%. Marża wyniosłaby ' + marginPct.toFixed(1) + '%. Zmniejsz któryś ze składników.';
+      sumBadge.textContent = 'Σ > 100%';
+      warning.textContent = '⚠️ Suma materiału, robocizny i pozostałych kosztów przekracza 100% — marża byłaby ' + marginPct.toFixed(2) + '%. Zmniejsz któryś ze składników.';
       warning.classList.add('visible');
       clearResults();
       return;
     }
 
-    sumBadge.className = 'sum-badge ok';
+    sumBadge.className   = 'sum-badge ok';
     sumBadge.textContent = 'Σ 100%';
 
     if (matPct <= 0) {
@@ -596,28 +629,22 @@
       clearResults();
       return;
     }
-
     warning.classList.remove('visible');
 
-    if (material <= 0) {
-      clearResults();
-      return;
-    }
+    if (material <= 0) { clearResults(); calculateReverse(); return; }
 
-    // Selling price = material_PLN / (matPct / 100)
     const sellingPrice = material / (matPct / 100);
     const labourCost   = sellingPrice * labourPct / 100;
     const otherCost    = sellingPrice * otherPct  / 100;
     const marginPLN    = sellingPrice * marginPct / 100;
+    const coeff        = 100 / matPct;
 
-    const coeff = 100 / matPct;
     document.getElementById('resPrice').textContent     = fmt(sellingPrice) + ' PLN';
     document.getElementById('resMarginPLN').textContent = fmt(marginPLN)    + ' PLN';
     document.getElementById('resMarginPct').textContent = fmtPct(marginPct);
     document.getElementById('resLabour').textContent    = fmt(labourCost)   + ' PLN';
     document.getElementById('resOther').textContent     = fmt(otherCost)    + ' PLN';
-    document.getElementById('resCoeff').textContent     = coeff.toFixed(4).replace('.',',');
-    calculateReverse();
+    document.getElementById('resCoeff').textContent     = coeff.toFixed(4).replace('.', ',');
 
     setBar('barMaterial', matPct);
     setBar('barLabour',   labourPct);
@@ -628,33 +655,18 @@
     document.getElementById('legLabour').textContent   = `Robocizna ${fmtPct(labourPct)}`;
     document.getElementById('legOther').textContent    = `Pozostałe ${fmtPct(otherPct)}`;
     document.getElementById('legMargin').textContent   = `Marża ${fmtPct(marginPct)}`;
+
+    calculateReverse();
   }
 
-  // Reverse calculator
-  function syncRevCoeff() {
-    const range = document.getElementById('revCoeffRange');
-    const num   = document.getElementById('revCoeffNum');
-    range.addEventListener('input', () => { num.value = parseFloat(range.value).toFixed(2); calculateReverse(); });
-    num.addEventListener('input', () => {
-      let v = parseFloat(num.value);
-      if (isNaN(v) || v < 1.01) return;
-      range.value = Math.min(v, 10);
-      calculateReverse();
-    });
-    document.getElementById('revMaterial').addEventListener('input', calculateReverse);
-  }
-  syncRevCoeff();
-
+  /* ── Reverse calculator ──────────────────────────────────────────── */
   function calculateReverse() {
-    const mat2     = parseFloat(document.getElementById('revMaterial').value)  || 0;
-    const coeff    = parseFloat(document.getElementById('revCoeffNum').value)  || 0;
+    const mat2      = parseFloat(document.getElementById('revMaterial').value) || 0;
+    const coeff     = parseFloat(document.getElementById('revCoeffNum').value) || 0;
     const labourPct = parseFloat(document.getElementById('labourNum').value)   || 0;
     const otherPct  = parseFloat(document.getElementById('otherNum').value)    || 0;
 
-    // Update equation label
-    const coeffFmt = coeff.toFixed(2).replace('.', ',');
-    document.getElementById('revCoeffEq').textContent = coeffFmt;
-    document.getElementById('revCoeffNum').value      = coeff > 0 ? coeff.toFixed(2) : '';
+    document.getElementById('revCoeffEq').textContent = coeff.toFixed(2).replace('.', ',');
 
     if (mat2 <= 0 || coeff < 1.01) {
       ['revPrice','revMarginPct','revMarginPLN'].forEach(id => {
@@ -664,28 +676,30 @@
       return;
     }
 
-    const sellingPrice2  = mat2 * coeff;
-    const impliedMatPct  = 100 / coeff;              // jaki % obrotu to materiał przy tym współczynniku
-    const marginPct2     = 100 - impliedMatPct - labourPct - otherPct;
-    const marginPLN2     = sellingPrice2 * marginPct2 / 100;
+    const sellingPrice2 = mat2 * coeff;
+    const impliedMatPct = 100 / coeff;
+    const marginPct2    = round2(100 - impliedMatPct - labourPct - otherPct);
+    const marginPLN2    = sellingPrice2 * marginPct2 / 100;
 
-    document.getElementById('revPrice').textContent     = fmt(sellingPrice2) + ' PLN';
+    document.getElementById('revPrice').textContent = fmt(sellingPrice2) + ' PLN';
+
+    const pctEl  = document.getElementById('revMarginPct');
+    const plnEl  = document.getElementById('revMarginPLN');
+    const noteEl = document.getElementById('revNote');
 
     if (marginPct2 < 0) {
-      document.getElementById('revMarginPct').textContent = fmtPct(marginPct2);
-      document.getElementById('revMarginPLN').textContent = fmt(marginPLN2) + ' PLN';
-      document.getElementById('revNote').textContent =
-        '⚠️ Ujemna marża — współczynnik za niski dla tej struktury kosztów. ' +
-        'Minimalny bezstratny współczynnik: ' + (100 / (100 - labourPct - otherPct)).toFixed(4).replace('.',',');
-      document.getElementById('revMarginPct').style.color = '#f87171';
-      document.getElementById('revMarginPLN').style.color = '#f87171';
+      pctEl.textContent  = fmtPct(marginPct2);
+      plnEl.textContent  = fmt(marginPLN2) + ' PLN';
+      pctEl.style.color  = '#f87171';
+      plnEl.style.color  = '#f87171';
+      const minCoeff = round2(100 / (100 - labourPct - otherPct));
+      noteEl.textContent = '⚠️ Ujemna marża. Min. współczynnik bezstratny: ' + minCoeff.toFixed(2).replace('.', ',');
     } else {
-      document.getElementById('revMarginPct').textContent = fmtPct(marginPct2);
-      document.getElementById('revMarginPLN').textContent = fmt(marginPLN2) + ' PLN';
-      document.getElementById('revNote').textContent =
-        'Przy tym współczynniku materiał stanowi ' + fmtPct(impliedMatPct) + ' obrotu.';
-      document.getElementById('revMarginPct').style.color = '';
-      document.getElementById('revMarginPLN').style.color = '';
+      pctEl.textContent  = fmtPct(marginPct2);
+      plnEl.textContent  = fmt(marginPLN2) + ' PLN';
+      pctEl.style.color  = '';
+      plnEl.style.color  = '';
+      noteEl.textContent = 'Przy tym współczynniku materiał stanowi ' + fmtPct(impliedMatPct) + ' obrotu.';
     }
   }
 
