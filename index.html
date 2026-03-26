@@ -236,6 +236,78 @@
       margin-top: 0.2rem;
     }
 
+    /* Coefficient highlight */
+    .result-item.coeff {
+      background: rgba(251,191,36,0.1);
+      border-color: rgba(251,191,36,0.3);
+    }
+    .result-item.coeff .result-value { color: #fbbf24; font-size: 1.6rem; }
+    .result-item.coeff .result-label { color: #78716c; }
+
+    /* Reverse calculator */
+    .card.reverse { border-color: rgba(251,191,36,0.2); }
+    .card.reverse .card-title { color: #92400e; }
+    .rev-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .rev-badge {
+      font-size: 0.7rem; font-weight: 700;
+      background: rgba(251,191,36,0.15); color: #fbbf24;
+      border: 1px solid rgba(251,191,36,0.3);
+      border-radius: 20px; padding: 0.15rem 0.6rem;
+    }
+
+    /* Coefficient input row */
+    .coeff-row {
+      display: flex; align-items: center; gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .coeff-label { font-size: 0.85rem; color: #94a3b8; white-space: nowrap; }
+    .coeff-input {
+      width: 80px;
+      background: rgba(251,191,36,0.08);
+      border: 1px solid rgba(251,191,36,0.25);
+      border-radius: 8px;
+      padding: 0.35rem 0.5rem;
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fbbf24;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .coeff-input:focus { border-color: #fbbf24; }
+    .coeff-eq { font-size: 0.9rem; color: #475569; }
+
+    .rev-results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .rev-result-item {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      text-align: center;
+    }
+    .rev-result-item.hi {
+      background: rgba(167,139,250,0.1);
+      border-color: rgba(167,139,250,0.3);
+    }
+    .rev-result-item .result-label { margin-bottom: 0.25rem; }
+    .rev-result-item .result-value { font-size: 1.1rem; }
+    .rev-result-item.hi .result-value { color: #c4b5fd; }
+    .rev-note {
+      margin-top: 0.75rem;
+      font-size: 0.78rem;
+      color: #475569;
+      text-align: center;
+    }
+
+    @media (max-width: 540px) {
+      .rev-results-grid { grid-template-columns: 1fr 1fr; }
+    }
+
     /* Breakdown */
     .breakdown { margin-top: 1.25rem; }
     .breakdown-title {
@@ -379,6 +451,10 @@
         <div class="result-label">Marża procentowa</div>
         <div class="result-value" id="resMarginPct">—</div>
       </div>
+      <div class="result-item coeff" style="grid-column: 1 / -1;">
+        <div class="result-label">Współczynnik materiału &nbsp;<span style="font-size:0.65rem;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:4px;padding:0.1rem 0.35rem;">cena = materiał × współczynnik</span></div>
+        <div class="result-value" id="resCoeff">—</div>
+      </div>
       <div class="result-item">
         <div class="result-label">Koszt robocizny</div>
         <div class="result-value" id="resLabour">—</div>
@@ -404,6 +480,48 @@
         <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div><span id="legMargin">Marża</span></div>
       </div>
     </div>
+  </div>
+  <!-- Kalkulator odwrotny: materiał × współczynnik → marża -->
+  <div class="card reverse">
+    <div class="rev-header">
+      <div class="card-title">Kalkulator odwrotny</div>
+      <span class="rev-badge">materiał × współczynnik = marża</span>
+    </div>
+
+    <div class="coeff-row">
+      <span class="coeff-label">Koszt materiału</span>
+      <div class="material-input-wrap" style="flex:1;padding:0.4rem 0.75rem;">
+        <span class="currency" style="font-size:0.9rem;">PLN</span>
+        <input type="number" id="revMaterial" placeholder="0.00" min="0" step="0.01" value="100"
+          style="font-size:1.1rem;" />
+      </div>
+    </div>
+
+    <div class="coeff-row">
+      <span class="coeff-label">Współczynnik</span>
+      <input type="number" class="coeff-input" id="revCoeffNum" min="1.01" max="20" step="0.01" value="2.50" />
+      <input type="range" id="revCoeffRange" min="1.01" max="10" step="0.01" value="2.50" style="flex:1;" />
+    </div>
+    <div style="font-size:0.78rem;color:#475569;margin-bottom:0.5rem;padding-left:0.25rem;">
+      Cena sprzedaży = materiał × <span id="revCoeffEq" style="color:#fbbf24;font-weight:700;">2,50</span>
+      &nbsp;|&nbsp; Struktura kosztów z kalkulatora głównego
+    </div>
+
+    <div class="rev-results-grid">
+      <div class="rev-result-item">
+        <div class="result-label">Cena sprzedaży</div>
+        <div class="result-value" id="revPrice">—</div>
+      </div>
+      <div class="rev-result-item hi">
+        <div class="result-label">Marża</div>
+        <div class="result-value" id="revMarginPct">—</div>
+      </div>
+      <div class="rev-result-item hi">
+        <div class="result-label">Marża kwotowa</div>
+        <div class="result-value" id="revMarginPLN">—</div>
+      </div>
+    </div>
+    <div class="rev-note" id="revNote"></div>
   </div>
 </div>
 
@@ -436,7 +554,7 @@
   }
 
   function clearResults() {
-    ['resPrice','resMarginPLN','resMarginPct','resLabour','resOther'].forEach(id => {
+    ['resPrice','resMarginPLN','resMarginPct','resLabour','resOther','resCoeff'].forEach(id => {
       document.getElementById(id).textContent = '—';
     });
     ['barMaterial','barLabour','barOther','barMargin'].forEach(id => setBar(id, 0));
@@ -492,11 +610,14 @@
     const otherCost    = sellingPrice * otherPct  / 100;
     const marginPLN    = sellingPrice * marginPct / 100;
 
+    const coeff = 100 / matPct;
     document.getElementById('resPrice').textContent     = fmt(sellingPrice) + ' PLN';
     document.getElementById('resMarginPLN').textContent = fmt(marginPLN)    + ' PLN';
     document.getElementById('resMarginPct').textContent = fmtPct(marginPct);
     document.getElementById('resLabour').textContent    = fmt(labourCost)   + ' PLN';
     document.getElementById('resOther').textContent     = fmt(otherCost)    + ' PLN';
+    document.getElementById('resCoeff').textContent     = coeff.toFixed(4).replace('.',',');
+    calculateReverse();
 
     setBar('barMaterial', matPct);
     setBar('barLabour',   labourPct);
@@ -507,6 +628,65 @@
     document.getElementById('legLabour').textContent   = `Robocizna ${fmtPct(labourPct)}`;
     document.getElementById('legOther').textContent    = `Pozostałe ${fmtPct(otherPct)}`;
     document.getElementById('legMargin').textContent   = `Marża ${fmtPct(marginPct)}`;
+  }
+
+  // Reverse calculator
+  function syncRevCoeff() {
+    const range = document.getElementById('revCoeffRange');
+    const num   = document.getElementById('revCoeffNum');
+    range.addEventListener('input', () => { num.value = parseFloat(range.value).toFixed(2); calculateReverse(); });
+    num.addEventListener('input', () => {
+      let v = parseFloat(num.value);
+      if (isNaN(v) || v < 1.01) return;
+      range.value = Math.min(v, 10);
+      calculateReverse();
+    });
+    document.getElementById('revMaterial').addEventListener('input', calculateReverse);
+  }
+  syncRevCoeff();
+
+  function calculateReverse() {
+    const mat2     = parseFloat(document.getElementById('revMaterial').value)  || 0;
+    const coeff    = parseFloat(document.getElementById('revCoeffNum').value)  || 0;
+    const labourPct = parseFloat(document.getElementById('labourNum').value)   || 0;
+    const otherPct  = parseFloat(document.getElementById('otherNum').value)    || 0;
+
+    // Update equation label
+    const coeffFmt = coeff.toFixed(2).replace('.', ',');
+    document.getElementById('revCoeffEq').textContent = coeffFmt;
+    document.getElementById('revCoeffNum').value      = coeff > 0 ? coeff.toFixed(2) : '';
+
+    if (mat2 <= 0 || coeff < 1.01) {
+      ['revPrice','revMarginPct','revMarginPLN'].forEach(id => {
+        document.getElementById(id).textContent = '—';
+      });
+      document.getElementById('revNote').textContent = '';
+      return;
+    }
+
+    const sellingPrice2  = mat2 * coeff;
+    const impliedMatPct  = 100 / coeff;              // jaki % obrotu to materiał przy tym współczynniku
+    const marginPct2     = 100 - impliedMatPct - labourPct - otherPct;
+    const marginPLN2     = sellingPrice2 * marginPct2 / 100;
+
+    document.getElementById('revPrice').textContent     = fmt(sellingPrice2) + ' PLN';
+
+    if (marginPct2 < 0) {
+      document.getElementById('revMarginPct').textContent = fmtPct(marginPct2);
+      document.getElementById('revMarginPLN').textContent = fmt(marginPLN2) + ' PLN';
+      document.getElementById('revNote').textContent =
+        '⚠️ Ujemna marża — współczynnik za niski dla tej struktury kosztów. ' +
+        'Minimalny bezstratny współczynnik: ' + (100 / (100 - labourPct - otherPct)).toFixed(4).replace('.',',');
+      document.getElementById('revMarginPct').style.color = '#f87171';
+      document.getElementById('revMarginPLN').style.color = '#f87171';
+    } else {
+      document.getElementById('revMarginPct').textContent = fmtPct(marginPct2);
+      document.getElementById('revMarginPLN').textContent = fmt(marginPLN2) + ' PLN';
+      document.getElementById('revNote').textContent =
+        'Przy tym współczynniku materiał stanowi ' + fmtPct(impliedMatPct) + ' obrotu.';
+      document.getElementById('revMarginPct').style.color = '';
+      document.getElementById('revMarginPLN').style.color = '';
+    }
   }
 
   calculate();
