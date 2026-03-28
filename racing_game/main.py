@@ -21,7 +21,7 @@ from track import build_track
 from agent import PopulationManager
 from player import PlayerCar
 from renderer import Renderer
-from ui import LeftPanel, RightPanel, TooltipState
+from ui import LeftPanel, RightPanel, TooltipState, StatsPopup, NNConfigPopup
 
 
 def _make_pop(track, params):
@@ -62,6 +62,11 @@ def main():
     player_enabled   = False
     show_track_lines = True
 
+    stats_popup  = StatsPopup()
+    nn_popup     = NNConfigPopup(left.nn_config)
+    show_stats   = False
+    show_nnconf  = False
+
     while True:
         clock.tick(FPS)
 
@@ -69,6 +74,16 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
+
+            # Popups absorb events when visible
+            if show_stats:
+                if stats_popup.handle_event(event):
+                    show_stats = False
+                continue
+            if show_nnconf:
+                if nn_popup.handle_event(event):
+                    show_nnconf = False
+                continue
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -130,12 +145,21 @@ def main():
                 pop.kill_all()
 
             if ev["restart"]:
-                pop = _make_pop(track, params)
+                params = left.params   # pick up latest nn_hidden_sizes
+                pop.restart(params)
                 player = _make_player(track, params)
                 player.enabled = player_enabled
-                selected_idx   = -1
+                selected_idx    = -1
                 selected_player = False
-                step_counter   = 0
+                step_counter    = 0
+
+            if ev["toggle_stats"]:
+                show_stats  = not show_stats
+                show_nnconf = False
+
+            if ev["toggle_nnconf"]:
+                show_nnconf = not show_nnconf
+                show_stats  = False
 
             if ev["toggle_player"]:
                 player_enabled = not player_enabled
@@ -181,6 +205,11 @@ def main():
                    selected_player=selected_player,
                    player=player)
         tooltip.draw_overlay(screen)
+
+        if show_stats:
+            stats_popup.draw(screen, pop.agents, pop.generation)
+        if show_nnconf:
+            nn_popup.draw(screen)
 
         if paused:
             _draw_pause(screen)

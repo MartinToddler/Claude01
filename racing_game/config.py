@@ -88,9 +88,11 @@ NN_HIDDEN1  = 24
 NN_HIDDEN2  = 16
 NN_OUTPUTS  = 2
 
-ELITE_FRAC     = 0.20
+ELITE_FRAC     = 0.30   # increased from 0.20 — more elites survive each generation
 MUTATION_BASE  = 0.12
 CROSSOVER_RATE = 0.50
+
+NN_DEFAULT_HIDDEN = [NN_HIDDEN1, NN_HIDDEN2]   # [24, 16] — used by Brain default
 
 # ── Tooltip texts ─────────────────────────────────────────────────────────────
 TOOLTIPS = {

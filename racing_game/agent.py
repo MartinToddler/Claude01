@@ -16,7 +16,8 @@ Changes vs v1:
 import math
 import numpy as np
 from config import (
-    NN_INPUTS, NN_HIDDEN1, NN_HIDDEN2, NN_OUTPUTS,
+    NN_INPUTS, NN_OUTPUTS,
+    NN_DEFAULT_HIDDEN,
     ELITE_FRAC, MUTATION_BASE, CROSSOVER_RATE,
     RAYCAST_COUNT, RAYCAST_DIST,
     STUCK_SPEED, STUCK_TIME,
@@ -29,29 +30,39 @@ from track import Track, get_start_pose
 # ── Neural-network brain ──────────────────────────────────────────────────────
 
 class Brain:
-    """Two hidden-layer MLP, tanh activations, weights stored as flat array."""
+    """
+    Configurable MLP with tanh activations, weights stored as flat array.
 
-    _SHAPES = [
-        (NN_INPUTS,  NN_HIDDEN1),
-        (NN_HIDDEN1, NN_HIDDEN2),
-        (NN_HIDDEN2, NN_OUTPUTS),
-    ]
+    hidden_sizes controls the number and width of hidden layers, e.g.:
+      [24, 16]       → 14→24→16→2  (default, 2 hidden layers)
+      [32, 32, 16]   → 14→32→32→16→2  (3 hidden layers)
+    """
 
-    def __init__(self, weights: np.ndarray | None = None):
-        self.weights = weights if weights is not None else self._random_weights()
-
-    @classmethod
-    def _random_weights(cls) -> np.ndarray:
-        total = sum(r * c + c for r, c in cls._SHAPES)
-        return np.random.randn(total).astype(np.float32) * 0.4
+    def __init__(self,
+                 hidden_sizes: list | None = None,
+                 weights: np.ndarray | None = None):
+        if hidden_sizes is None:
+            hidden_sizes = list(NN_DEFAULT_HIDDEN)
+        all_sizes = [NN_INPUTS] + list(hidden_sizes) + [NN_OUTPUTS]
+        self._shapes = [(all_sizes[i], all_sizes[i + 1])
+                        for i in range(len(all_sizes) - 1)]
+        total = sum(r * c + c for r, c in self._shapes)
+        if weights is not None:
+            self.weights = weights.copy().astype(np.float32)
+        else:
+            self.weights = np.random.randn(total).astype(np.float32) * 0.4
 
     @property
     def size(self) -> int:
         return len(self.weights)
 
+    @property
+    def hidden_sizes(self) -> list:
+        return [c for _, c in self._shapes[:-1]]
+
     def _unpack(self):
         idx, Ws, Bs = 0, [], []
-        for r, c in self._SHAPES:
+        for r, c in self._shapes:
             w_size = r * c
             Ws.append(self.weights[idx: idx + w_size].reshape(r, c))
             idx += w_size
@@ -83,6 +94,9 @@ class Agent:
         self._lap_active  = True   # start timing immediately
         self._best_prog   = 0.0    # cumulative forward progress (delta-based)
         self._prev_prog   = None   # None until first project() call
+        # Ancestry (set by breed(), None for initial population)
+        self.parent_gen:  int | None = None
+        self.parent_rank: int | None = None
 
     def reset(self, x: float, y: float, heading: float, params: dict):
         self.car.reset(x, y, heading)
@@ -172,10 +186,13 @@ class Agent:
 
 class PopulationManager:
     def __init__(self, track: Track, params: dict):
-        self.track      = track
-        self.params     = params
-        self.num_agents = int(params.get("num_agents", DEFAULT_NUM_AGENTS))
-        self.max_laps   = int(params.get("max_laps",   DEFAULT_MAX_LAPS))
+        self.track        = track
+        self.params       = params
+        self.num_agents   = int(params.get("num_agents", DEFAULT_NUM_AGENTS))
+        self.max_laps     = int(params.get("max_laps",   DEFAULT_MAX_LAPS))
+        # NN architecture — only updated on full restart
+        self._hidden_sizes: list = list(
+            params.get("nn_hidden_sizes", NN_DEFAULT_HIDDEN))
 
         self.generation         = 0
         self.time_s             = 0.0
@@ -186,6 +203,10 @@ class PopulationManager:
         self.agents: list[Agent] = []
         self._build_initial_population()
 
+    def _make_brain(self, weights: np.ndarray | None = None) -> Brain:
+        """Create a Brain with the current hidden-layer configuration."""
+        return Brain(hidden_sizes=self._hidden_sizes, weights=weights)
+
     # ── Population construction ───────────────────────────────────────────────
 
     def _build_initial_population(self):
@@ -193,7 +214,7 @@ class PopulationManager:
         positions   = self._start_grid(self.num_agents)
         for x, y, h in positions:
             car   = Car(x, y, h, self.params)
-            brain = Brain()
+            brain = self._make_brain()
             self.agents.append(Agent(car, brain))
 
     def _start_grid(self, n: int) -> list[tuple[float, float, float]]:
@@ -285,39 +306,60 @@ class PopulationManager:
         mut_scale = 0.6 + (risk - 1) / 9.0 * 1.2
         mut_std   = MUTATION_BASE * mut_scale
 
-        # Elites: keep top ELITE_FRAC of current population unchanged
-        n_elite  = max(2, int(len(ranked) * ELITE_FRAC))
-        elites   = [a.brain.weights.copy() for a in ranked[:n_elite]]
-        new_w    = list(elites)
+        # ── Elites (top ELITE_FRAC = 30%) — preserved unchanged ──────────
+        n_elite = max(2, int(len(ranked) * ELITE_FRAC))
+        new_entries: list[tuple[np.ndarray, int, int]] = []   # (weights, parent_gen, parent_rank)
+        for rank_i, ag in enumerate(ranked[:n_elite]):
+            new_entries.append((ag.brain.weights.copy(), self.generation - 1, rank_i))
 
-        pool = ranked[: max(2, len(ranked) // 2)]
+        # Parent pool: top 30% only — higher quality than old top-50%
+        pool_size = max(2, int(len(ranked) * 0.30))
+        pool = ranked[:pool_size]
 
-        while len(new_w) < num:
-            pa  = np.random.choice(pool).brain.weights
-            pb  = np.random.choice(pool).brain.weights
-            mask  = np.random.rand(pa.size) < CROSSOVER_RATE
-            child = np.where(mask, pa, pb).astype(np.float32)
-            child += np.random.randn(child.size).astype(np.float32) * mut_std
-            new_w.append(child)
+        n_remain  = num - n_elite
+        n_clone   = n_remain // 2   # 50% of non-elites: clones with soft mutation
+        n_cross   = n_remain - n_clone  # 50% of non-elites: crossover (best × pool)
 
-        # Rebuild agents list to requested size
-        positions = self._start_grid(num)
+        # ── Clones: round-robin from elites + half-strength mutation ──────
+        for i in range(n_clone):
+            parent_rank = i % n_elite
+            parent_w    = ranked[parent_rank].brain.weights
+            child = parent_w.copy() + (
+                np.random.randn(parent_w.size).astype(np.float32) * mut_std * 0.5)
+            new_entries.append((child, self.generation - 1, parent_rank))
+
+        # ── Crossover: ranked[0] always parent A, random pool member as B ─
+        best_w = ranked[0].brain.weights
+        for _ in range(n_cross):
+            pb_agent = pool[np.random.randint(len(pool))]
+            pb       = pb_agent.brain.weights
+            mask     = np.random.rand(best_w.size) < CROSSOVER_RATE
+            child    = np.where(mask, best_w, pb).astype(np.float32)
+            child   += np.random.randn(child.size).astype(np.float32) * mut_std
+            pb_rank  = ranked.index(pb_agent)
+            new_entries.append((child, self.generation - 1, pb_rank))
+
+        # ── Rebuild agents list ───────────────────────────────────────────
+        positions  = self._start_grid(num)
         new_agents = []
         for i in range(num):
             x, y, h = positions[i]
+            w, p_gen, p_rank = new_entries[i]
             if i < len(self.agents):
                 ag = self.agents[i]
                 ag.reset(x, y, h, self.params)
-                ag.brain = Brain(new_w[i])
+                ag.brain = self._make_brain(w)
             else:
                 car = Car(x, y, h, self.params)
-                ag  = Agent(car, Brain(new_w[i]))
+                ag  = Agent(car, self._make_brain(w))
+            ag.parent_gen  = p_gen
+            ag.parent_rank = p_rank
             new_agents.append(ag)
 
-        self.agents  = new_agents
+        self.agents     = new_agents
         self.num_agents = num
-        self.time_s  = 0.0
-        self._best   = self.agents[0] if self.agents else None
+        self.time_s     = 0.0
+        self._best      = self.agents[0] if self.agents else None
 
     # ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -343,6 +385,19 @@ class PopulationManager:
             ag.reset(x, y, h, self.params)
             ag.brain = brain_bk
         self.time_s = 0.0
+
+    def restart(self, params: dict):
+        """Full restart: re-read NN architecture and rebuild population from scratch."""
+        self.params        = params
+        self._hidden_sizes = list(params.get("nn_hidden_sizes", NN_DEFAULT_HIDDEN))
+        self.num_agents    = int(params.get("num_agents", DEFAULT_NUM_AGENTS))
+        self.max_laps      = int(params.get("max_laps",   DEFAULT_MAX_LAPS))
+        self.generation    = 0
+        self.time_s        = 0.0
+        self.gen_best_fitness  = 0.0
+        self.all_time_best_lap = None
+        self.fitness_history   = []
+        self._build_initial_population()
 
     @property
     def alive_agents(self) -> list[Agent]:

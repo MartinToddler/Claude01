@@ -353,6 +353,11 @@ class LeftPanel:
                                   tip_id="track_lines")
         self.btn_kill    = Button("Kill All → Next Gen", C["bad"], h=24)
         self.btn_restart = Button("Restart Simulation",  C["warn"], h=24)
+        self.btn_stats   = Button("Stats ▶",   C["accent"], h=22)
+        self.btn_nnconf  = Button("NN Config ▶", C["warn"], h=22)
+
+        # NN architecture config (only applied on Restart)
+        self.nn_config = {"layers": 2, "sizes": [24, 16, 16, 8]}
 
         self._layout()
 
@@ -372,7 +377,7 @@ class LeftPanel:
         def row3(btns, info, h=22):
             """3 buttons in a row + optional info button at right."""
             nonlocal y
-            y += 4
+            y += 16   # label space: label drawn at btn.y-13, needs ≥13px above
             bw = (w - 8) // 3
             for i, btn in enumerate(btns.values()):
                 btn.set_rect(x + i * (bw + 4), y, bw, h)
@@ -386,7 +391,7 @@ class LeftPanel:
         row3(self.drive_btns, self.drive_info, 22)
 
         # Gear ratios + final drive
-        y += 4
+        y += 16   # label space
         self._gear_y = y
         self.gear_row.layout(x, y, w)
         y += 3 * 34 + 8 + 34 + 10   # 3 gear rows + final drive row
@@ -403,7 +408,7 @@ class LeftPanel:
 
         # ── thin separator ────────────────────────────────────────────────────
         self._sep2_y = y + 4
-        y += 12
+        y += 16
 
         # ── TRACK ─────────────────────────────────────────────────────────────
         y += 4
@@ -414,10 +419,9 @@ class LeftPanel:
 
         # ── main divider ──────────────────────────────────────────────────────
         self._div_y = y
-        y += 14
+        y += 22   # room for "SIMULATION" header text
 
         # ── SIMULATION ────────────────────────────────────────────────────────
-        self._speed_label_y = y - 12
         self.speed_row.layout(x, y, w)
         y += 28
 
@@ -432,6 +436,9 @@ class LeftPanel:
         y += 30
         self.btn_kill.set_rect(   x,         y, bw2, 24)
         self.btn_restart.set_rect(x + bw2+4, y, bw2, 24)
+        y += 30
+        self.btn_stats.set_rect(  x,         y, bw2, 22)
+        self.btn_nnconf.set_rect( x + bw2+4, y, bw2, 22)
 
     # ── Draw ──────────────────────────────────────────────────────────────────
 
@@ -482,9 +489,8 @@ class LeftPanel:
         # ── main divider ──────────────────────────────────────────────────────
         pygame.draw.line(surf, C["panel_border"],
                          (self.PAD, self._div_y), (self.W - self.PAD, self._div_y), 1)
-        _txt(surf, "SIMULATION", self.PAD, self._div_y + 3, 10, C["text_dim"], bold=True)
+        _txt(surf, "SIMULATION", self.PAD, self._div_y + 5, 10, C["text_dim"], bold=True)
 
-        _txt(surf, "Speed", self.PAD, self._speed_label_y, 10, C["text_dim"])
         self.speed_row.draw(surf)
         self.s_risk.draw(surf)
         self.s_num.draw(surf)
@@ -504,6 +510,8 @@ class LeftPanel:
         self.btn_lines.draw(surf)
         self.btn_kill.draw(surf)
         self.btn_restart.draw(surf)
+        self.btn_stats.draw(surf)
+        self.btn_nnconf.draw(surf)
 
     # ── Events ────────────────────────────────────────────────────────────────
 
@@ -515,7 +523,8 @@ class LeftPanel:
         """
         result = {k: False for k in (
             "params_changed", "track_changed", "speed_changed",
-            "kill_all", "restart", "toggle_player", "toggle_lines"
+            "kill_all", "restart", "toggle_player", "toggle_lines",
+            "toggle_stats", "toggle_nnconf"
         )}
 
         # Performance sliders
@@ -577,6 +586,8 @@ class LeftPanel:
             if self.btn_restart.hit(pos): result["restart"]        = True
             if self.btn_player.hit(pos):  result["toggle_player"]  = True
             if self.btn_lines.hit(pos):   result["toggle_lines"]   = True
+            if self.btn_stats.hit(pos):   result["toggle_stats"]   = True
+            if self.btn_nnconf.hit(pos):  result["toggle_nnconf"]  = True
 
         return result
 
@@ -598,22 +609,234 @@ class LeftPanel:
     @property
     def params(self) -> dict:
         p = dict(CAR_DEFAULTS)
-        p["power"]         = self.s_power.value
-        p["tyre_type"]     = self.tyre_type
-        p["tyre_pressure"] = self.s_pressure.value
-        p["downforce"]     = self.s_downforce.value
-        p["driver_risk"]   = self.s_risk.value
-        p["gear_ratios"]   = self.gear_row.gear_values
-        p["final_drive"]   = self.gear_row.final_drive
-        p["drive_type"]    = self.drive_type
-        p["engine_pos"]    = self.engine_pos
-        p["num_agents"]    = int(self.s_num.value)
-        p["max_laps"]      = int(self.s_laps.value)
+        p["power"]           = self.s_power.value
+        p["tyre_type"]       = self.tyre_type
+        p["tyre_pressure"]   = self.s_pressure.value
+        p["downforce"]       = self.s_downforce.value
+        p["driver_risk"]     = self.s_risk.value
+        p["gear_ratios"]     = self.gear_row.gear_values
+        p["final_drive"]     = self.gear_row.final_drive
+        p["drive_type"]      = self.drive_type
+        p["engine_pos"]      = self.engine_pos
+        p["num_agents"]      = int(self.s_num.value)
+        p["max_laps"]        = int(self.s_laps.value)
+        layers = self.nn_config["layers"]
+        p["nn_hidden_sizes"] = self.nn_config["sizes"][:layers]
         return p
 
     @property
     def sim_speed(self) -> int:
         return self.speed_row.value
+
+
+# ── NN Config Popup ───────────────────────────────────────────────────────────
+
+class NNConfigPopup:
+    """Overlay for configuring neural-network architecture (applies on Restart)."""
+
+    W = 270
+    H = 280
+
+    def __init__(self, nn_config: dict):
+        self._cfg = nn_config   # shared reference to LeftPanel.nn_config
+        # Sliders for layer count and up to 4 layer sizes
+        self._s_layers = Slider("Hidden Layers", 1, 4,
+                                nn_config["layers"], ".0f", C["accent"])
+        self._s_sizes  = [
+            Slider(f"Layer {i+1} size", 4, 64,
+                   nn_config["sizes"][i], ".0f", C["warn"])
+            for i in range(4)
+        ]
+        self._close_rect = pygame.Rect(0, 0, 20, 20)
+        self._rect       = pygame.Rect(0, 0, self.W, self.H)
+        self._layout()
+
+    def _layout(self):
+        bx = 20
+        by = (SCREEN_H - self.H) // 2
+        self._rect.topleft = (bx, by)
+        self._close_rect   = pygame.Rect(bx + self.W - 26, by + 6, 20, 20)
+        x  = bx + 12
+        w  = self.W - 24 - 20
+        y  = by + 36
+        self._s_layers.set_rect(x, y, w);  y += 35
+        for s in self._s_sizes:
+            s.set_rect(x, y, w);  y += 35
+
+    def draw(self, surf):
+        # Semi-transparent backdrop
+        veil = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+        veil.fill((0, 0, 0, 140))
+        surf.blit(veil, (0, 0))
+
+        pygame.draw.rect(surf, C["panel_bg"],     self._rect, 0, 8)
+        pygame.draw.rect(surf, C["accent"],       self._rect, 2, 8)
+
+        bx, by = self._rect.topleft
+        _txt(surf, "NN ARCHITEKTURA", bx + 12, by + 10, 12, C["accent"], bold=True)
+        _txt(surf, "⚠ aktywne po Restart", bx + 12, by + 24, 9, C["warn"])
+
+        # Close X
+        pygame.draw.rect(surf, C["bad"], self._close_rect, 0, 4)
+        ts = _f(11, True).render("X", True, C["text"])
+        surf.blit(ts, (self._close_rect.centerx - ts.get_width()//2,
+                       self._close_rect.centery - ts.get_height()//2))
+
+        n_layers = max(1, min(4, int(round(self._s_layers.value))))
+        self._s_layers.draw(surf)
+        for i, s in enumerate(self._s_sizes):
+            if i < n_layers:
+                s.draw(surf)
+            else:
+                # Draw dimmed inactive layer
+                _txt(surf, f"Layer {i+1} size  —",
+                     s.rect.x, s.rect.y - 13, 11, C["panel_border"])
+
+    def handle_event(self, event) -> bool:
+        """Return True if popup should close."""
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            self._sync(); return True
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self._close_rect.collidepoint(event.pos):
+                self._sync(); return True
+            # Click outside popup closes it
+            if not self._rect.collidepoint(event.pos):
+                self._sync(); return True
+
+        n_layers = max(1, min(4, int(round(self._s_layers.value))))
+        changed  = self._s_layers.handle_event(event)
+        for i, s in enumerate(self._s_sizes):
+            if i < n_layers:
+                changed |= s.handle_event(event)
+        if changed:
+            self._sync()
+        return False
+
+    def _sync(self):
+        """Write current slider values back to nn_config dict."""
+        self._cfg["layers"] = max(1, min(4, int(round(self._s_layers.value))))
+        for i, s in enumerate(self._s_sizes):
+            self._cfg["sizes"][i] = max(4, min(64, int(round(s.value))))
+
+
+# ── Stats Popup ───────────────────────────────────────────────────────────────
+
+class StatsPopup:
+    """Overlay table showing per-agent statistics including ancestry."""
+
+    W  = 800
+    H  = 460
+    ROW_H   = 18
+    HEAD_H  = 24
+    COLS    = [
+        ("Rank",        38),
+        ("ID",          30),
+        ("Status",      54),
+        ("Okr.",        38),
+        ("Najl. czas",  80),
+        ("Fitness",     72),
+        ("Rodz. gen",   72),
+        ("Rodz. rank",  72),
+    ]
+
+    def __init__(self):
+        self._scroll = 0
+        bx = (SCREEN_W - self.W) // 2
+        by = (SCREEN_H - self.H) // 2
+        self._rect       = pygame.Rect(bx, by, self.W, self.H)
+        self._close_rect = pygame.Rect(bx + self.W - 28, by + 6, 20, 20)
+        self._body_rect  = pygame.Rect(bx + 2, by + self.HEAD_H + 26,
+                                       self.W - 4,
+                                       self.H - self.HEAD_H - 30)
+
+    def draw(self, surf, agents, generation):
+        # Semi-transparent backdrop
+        veil = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+        veil.fill((0, 0, 0, 160))
+        surf.blit(veil, (0, 0))
+
+        pygame.draw.rect(surf, C["panel_bg"], self._rect, 0, 8)
+        pygame.draw.rect(surf, C["accent"],   self._rect, 2, 8)
+
+        bx, by = self._rect.topleft
+        _txt(surf, f"STATYSTYKI AGENTÓW  —  generacja {generation}",
+             bx + 12, by + 8, 12, C["accent"], bold=True)
+
+        # Close button
+        pygame.draw.rect(surf, C["bad"], self._close_rect, 0, 4)
+        ts = _f(11, True).render("X", True, C["text"])
+        surf.blit(ts, (self._close_rect.centerx - ts.get_width()//2,
+                       self._close_rect.centery - ts.get_height()//2))
+
+        ranked = sorted(agents, key=lambda a: a.sort_key, reverse=True)
+
+        # Column headers
+        cx = bx + 6
+        hy = by + self.HEAD_H + 6
+        pygame.draw.rect(surf, C["panel_header"],
+                         (bx + 2, hy, self.W - 4, 20))
+        for label, cw in self.COLS:
+            _txt(surf, label, cx + 2, hy + 3, 10, C["text_dim"])
+            cx += cw
+
+        # Scrollable body
+        br = self._body_rect
+        pygame.draw.rect(surf, (12, 14, 22), br)
+
+        max_visible = br.h // self.ROW_H
+        max_scroll  = max(0, len(ranked) - max_visible)
+        self._scroll = max(0, min(self._scroll, max_scroll))
+
+        for row_i, ag in enumerate(ranked[self._scroll:
+                                          self._scroll + max_visible]):
+            rank   = self._scroll + row_i
+            ry     = br.y + row_i * self.ROW_H
+            bg_col = (20, 24, 38) if row_i % 2 == 0 else (16, 18, 28)
+            pygame.draw.rect(surf, bg_col, (br.x, ry, br.w, self.ROW_H))
+
+            status   = "ALIVE" if ag.car.alive else "CRASHED"
+            st_col   = C["good"] if ag.car.alive else C["bad"]
+            bl       = f"{ag.best_lap_s:.2f}s" if ag.best_lap_s else "---"
+            fit      = f"{ag.fitness:.3f}"
+            p_gen    = str(ag.parent_gen)  if ag.parent_gen  is not None else "—"
+            p_rank   = str(ag.parent_rank) if ag.parent_rank is not None else "—"
+
+            cells = [
+                (str(rank + 1),      C["text"]),
+                (str(rank),          C["text_dim"]),
+                (status,             st_col),
+                (str(ag.laps),       C["text"]),
+                (bl,                 C["warn"]),
+                (fit,                C["accent"]),
+                (p_gen,              C["text_dim"]),
+                (p_rank,             C["text_dim"]),
+            ]
+            cx = br.x + 4
+            for (txt, col), (_, cw) in zip(cells, self.COLS):
+                _txt(surf, txt, cx, ry + 3, 10, col)
+                cx += cw
+
+        # Scroll indicator
+        if max_scroll > 0:
+            frac_top = self._scroll / (len(ranked) or 1)
+            frac_vis = max_visible / (len(ranked) or 1)
+            bar_h    = max(20, int(br.h * frac_vis))
+            bar_y    = br.y + int((br.h - bar_h) * frac_top)
+            pygame.draw.rect(surf, C["panel_border"],
+                             (br.right - 6, bar_y, 4, bar_h), 0, 2)
+
+    def handle_event(self, event) -> bool:
+        """Return True if popup should close."""
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return True
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self._close_rect.collidepoint(event.pos):
+                return True
+            if not self._rect.collidepoint(event.pos):
+                return True
+        if event.type == pygame.MOUSEWHEEL:
+            self._scroll = max(0, self._scroll - event.y)
+        return False
 
 
 # ── Right panel ───────────────────────────────────────────────────────────────
