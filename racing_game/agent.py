@@ -1,20 +1,26 @@
 """
 Neural-network brain + neuro-evolution (genetic algorithm) for the racing AI.
 
-Each car has a Brain — a small fully-connected network (tanh activations).
-The PopulationManager runs a generation: all cars drive simultaneously until
-dead, computes fitness, then breeds the next generation via elitism +
-crossover + mutation.
-
-No external ML libraries required — pure NumPy.
+Changes vs v1:
+  • Starting grid: cars placed in 2-column grid perpendicular to track,
+    ALL facing the same (forward) direction.
+  • Fitness = 1/best_lap_time if lap completed, else small progress score.
+    Selection favours fastest laps, not longest survivors.
+  • max_laps per generation: generation ends when the leading car finishes
+    max_laps, not just when all are dead.
+  • Dynamic population size: num_agents can be changed between generations.
+  • kill_all(): immediately marks all cars dead → triggers breed() next frame.
+  • NN inputs extended to 14 (adds omega_norm, vy_norm).
 """
 
 import math
 import numpy as np
 from config import (
     NN_INPUTS, NN_HIDDEN1, NN_HIDDEN2, NN_OUTPUTS,
-    ELITE_COUNT, MUTATION_BASE, CROSSOVER_RATE,
-    NUM_AGENTS, RAYCAST_COUNT, RAYCAST_DIST,
+    ELITE_FRAC, MUTATION_BASE, CROSSOVER_RATE,
+    RAYCAST_COUNT, RAYCAST_DIST,
+    STUCK_SPEED, STUCK_TIME,
+    DEFAULT_NUM_AGENTS, DEFAULT_MAX_LAPS,
 )
 from car import Car
 from track import Track, get_start_pose
@@ -23,9 +29,8 @@ from track import Track, get_start_pose
 # ── Neural-network brain ──────────────────────────────────────────────────────
 
 class Brain:
-    """Two hidden-layer MLP, all tanh, weights stored as flat array."""
+    """Two hidden-layer MLP, tanh activations, weights stored as flat array."""
 
-    # Layer sizes
     _SHAPES = [
         (NN_INPUTS,  NN_HIDDEN1),
         (NN_HIDDEN1, NN_HIDDEN2),
@@ -37,18 +42,15 @@ class Brain:
 
     @classmethod
     def _random_weights(cls) -> np.ndarray:
-        total = sum(r * c + c for r, c in cls._SHAPES)   # W + bias per layer
-        return np.random.randn(total).astype(np.float32) * 0.5
+        total = sum(r * c + c for r, c in cls._SHAPES)
+        return np.random.randn(total).astype(np.float32) * 0.4
 
     @property
     def size(self) -> int:
         return len(self.weights)
 
-    # ── Unpack weights into layer matrices ───────────────────────────────────
-
     def _unpack(self):
-        idx = 0
-        Ws, Bs = [], []
+        idx, Ws, Bs = 0, [], []
         for r, c in self._SHAPES:
             w_size = r * c
             Ws.append(self.weights[idx: idx + w_size].reshape(r, c))
@@ -62,137 +64,171 @@ class Brain:
         h = x
         for W, b in zip(Ws, Bs):
             h = np.tanh(h @ W + b)
-        return h   # shape (NN_OUTPUTS,)
+        return h
 
 
-# ── Agent: Brain + Car + sensors ─────────────────────────────────────────────
+# ── Agent ─────────────────────────────────────────────────────────────────────
 
 class Agent:
     def __init__(self, car: Car, brain: Brain):
         self.car   = car
         self.brain = brain
+        self._init_tracking()
+
+    def _init_tracking(self):
         self.fitness      = 0.0
         self.laps         = 0
-        self.best_lap_s   = None    # seconds
+        self.best_lap_s   = None   # seconds (None = no lap completed)
         self._lap_start   = 0.0
-        self._prev_prog   = 0.0
-        self._best_prog   = 0.0
-        self._lap_active  = False
+        self._lap_active  = True   # start timing immediately
+        self._best_prog   = 0.0    # cumulative forward progress (delta-based)
+        self._prev_prog   = None   # None until first project() call
 
-    def reset(self, x, y, heading, params):
+    def reset(self, x: float, y: float, heading: float, params: dict):
         self.car.reset(x, y, heading)
         self.car.update_params(params)
-        self.fitness       = 0.0
-        self.laps          = 0
-        self.best_lap_s    = None
-        self._prev_prog    = 0.0
-        self._best_prog    = 0.0   # max forward progress in current lap
-        self._lap_active   = False
+        self._init_tracking()
+
+    # ── Sensing ───────────────────────────────────────────────────────────────
 
     def sense(self, track: Track) -> np.ndarray:
-        """Build input vector for the neural net."""
         car = self.car
         rays = np.zeros(RAYCAST_COUNT, dtype=np.float32)
-        angle_step = math.pi / (RAYCAST_COUNT - 1)   # 0..180° spread
+        angle_step = math.pi / (RAYCAST_COUNT - 1)
         for i in range(RAYCAST_COUNT):
-            angle = car.heading - math.pi / 2 + i * angle_step
+            angle  = car.heading - math.pi / 2 + i * angle_step
             rays[i] = track.raycast(car.x, car.y, angle, RAYCAST_DIST)
 
-        _, lat, track_heading = track.project(car.x, car.y)
+        _, _, track_heading = track.project(car.x, car.y)
         heading_err = math.atan2(
             math.sin(car.heading - track_heading),
             math.cos(car.heading - track_heading),
-        ) / math.pi   # normalised -1..1
+        ) / math.pi
 
-        gear_norm = (car.gear - 1) / max(car.num_gears - 1, 1)
+        gear_norm  = (car.gear - 1) / max(car.num_gears - 1, 1)
+        omega_norm = max(-1.0, min(1.0, car.omega / 5.0))
+        vy_norm    = max(-1.0, min(1.0, car.vy   / 20.0))
 
         return np.array(
             [*rays,
              car.speed_norm,
-             car.lat_v / 10.0,
+             vy_norm,
              heading_err,
-             gear_norm],
+             gear_norm,
+             omega_norm],
             dtype=np.float32,
         )
 
     def act(self, track: Track) -> tuple[float, float]:
         inp = self.sense(track)
         out = self.brain.forward(inp)
-        throttle_brake = float(out[0])   # tanh → [-1, 1]
-        steer          = float(out[1])   # tanh → [-1, 1]
-        return throttle_brake, steer
+        return float(out[0]), float(out[1])  # throttle_brake, steer
 
-    def update_fitness(self, track: Track, dt: float, time_s: float):
-        """Called after car.step(); accumulates fitness and lap detection.
+    # ── Fitness / lap tracking ────────────────────────────────────────────────
 
-        Uses a delta-accumulation approach: only small *forward* increments
-        in progress are counted.  Large jumps (wraps, backward movement) are
-        ignored, making the metric exploit-proof.
+    def update_fitness(self, track: Track, time_s: float):
         """
-        car = self.car
-        progress, _, _ = track.project(car.x, car.y)
+        Delta-accumulation fitness (immune to backward exploit).
+        Ranking metric: 1/best_lap_s (fastest lap wins).
+        """
+        progress, _, _ = track.project(self.car.x, self.car.y)
 
-        # Forward delta: raw difference clamped to [0, 0.1]
-        # — negative → backward (ignored)
-        # — >0.1    → spurious wrap jump (ignored)
+        # Initialise prev_prog on first call (no jump at frame 0)
+        if self._prev_prog is None:
+            self._prev_prog = progress
+            return
+
+        # Forward-only delta in [0, 0.10] — ignores backward / wrap jumps
         delta = progress - self._prev_prog
         self._prev_prog = progress
 
         if 0.0 < delta < 0.10:
             self._best_prog += delta
 
-        # Lap detection: accumulated forward progress crosses 1.0
+        # Lap completion: cumulative progress crosses 1.0
         if self._best_prog >= 1.0:
-            if self._lap_active:
-                lap_t = time_s - self._lap_start
-                self.laps += 1
+            lap_t = time_s - self._lap_start
+            self.laps += 1
+            if lap_t > 1.0:   # ignore impossibly short laps
                 if self.best_lap_s is None or lap_t < self.best_lap_s:
                     self.best_lap_s = lap_t
             self._lap_start  = time_s
-            self._lap_active = True
-            self._best_prog -= 1.0   # keep remainder
+            self._best_prog -= 1.0
 
-        # Fitness = completed laps + fractional progress in current lap
-        self.fitness = self.laps + self._best_prog
+        # fitness: fastest-lap metric (higher = better) + progress fallback
+        if self.best_lap_s is not None:
+            self.fitness = 1000.0 / self.best_lap_s + self.laps * 0.5
+        else:
+            self.fitness = self._best_prog   # progress within first lap
+
+    @property
+    def sort_key(self):
+        """Primary sort key: number of laps, then best lap time (asc)."""
+        lap_t = self.best_lap_s if self.best_lap_s is not None else 1e9
+        return (self.laps, -lap_t, self._best_prog)
 
 
 # ── Population manager ────────────────────────────────────────────────────────
 
 class PopulationManager:
-    """
-    Manages a generation of Agents.  Call step() each frame; when all agents
-    are dead, breed() and reset.
-    """
-
     def __init__(self, track: Track, params: dict):
-        self.track       = track
-        self.params      = params
-        self.generation  = 0
-        self.time_s      = 0.0
+        self.track      = track
+        self.params     = params
+        self.num_agents = int(params.get("num_agents", DEFAULT_NUM_AGENTS))
+        self.max_laps   = int(params.get("max_laps",   DEFAULT_MAX_LAPS))
+
+        self.generation         = 0
+        self.time_s             = 0.0
         self.gen_best_fitness   = 0.0
-        self.all_time_best_lap  = None
-        self.fitness_history    = []   # list of best-fitness per generation
+        self.all_time_best_lap  = None     # seconds
+        self.fitness_history    = []       # best fitness per generation
 
-        sx, sy, sh = get_start_pose(track)
-        self.start = (sx, sy, sh)
-
-        # Create initial population
         self.agents: list[Agent] = []
-        for _ in range(NUM_AGENTS):
-            car   = Car(sx, sy, sh, params)
+        self._build_initial_population()
+
+    # ── Population construction ───────────────────────────────────────────────
+
+    def _build_initial_population(self):
+        self.agents = []
+        positions   = self._start_grid(self.num_agents)
+        for x, y, h in positions:
+            car   = Car(x, y, h, self.params)
             brain = Brain()
             self.agents.append(Agent(car, brain))
 
-        # Index of current best agent (for highlighting)
-        self.best_idx = 0
+    def _start_grid(self, n: int) -> list[tuple[float, float, float]]:
+        """
+        Place n cars in a 2-column starting grid, all facing FORWARD along
+        the track.  Each row is 3 track-points behind the previous; columns
+        are separated by 22 px across the track (left / right of centre).
+        """
+        track  = self.track
+        pts    = track.pts
+        npts   = len(pts)
+        si     = track.start_idx
+        norm   = track.norm     # unit perpendicular (left-of-forward)
+        tang   = track.tang
 
-    # ── Frame step ────────────────────────────────────────────────────────────
+        positions = []
+        for i in range(n):
+            col     = i % 2
+            row     = i // 2
+            idx     = (si + row * 3) % npts   # step backward 3 pts each row
+            # Lateral offset: col 0 = slightly left, col 1 = slightly right
+            across  = (col - 0.5) * 22.0      # ±11 px from centreline
+            x       = float(pts[idx, 0] + norm[idx, 0] * across)
+            y       = float(pts[idx, 1] + norm[idx, 1] * across)
+            heading = math.atan2(float(tang[idx, 1]), float(tang[idx, 0]))
+            positions.append((x, y, heading))
+        return positions
 
-    def step(self, dt: float = 1/60):
-        from config import STUCK_SPEED, STUCK_TIME
+    # ── Per-frame step ────────────────────────────────────────────────────────
 
+    def step(self, dt: float = 1 / 60) -> int:
+        """Advance simulation by dt.  Returns number of still-alive cars."""
         self.time_s += dt
-        alive_count = 0
+        alive_count  = 0
+        best_laps    = 0
 
         for agent in self.agents:
             if not agent.car.alive:
@@ -207,86 +243,105 @@ class PopulationManager:
                 agent.car.alive = False
                 continue
 
-            agent.update_fitness(self.track, dt, self.time_s)
+            agent.update_fitness(self.track, self.time_s)
 
-        # Identify best live agent by fitness
-        best = max(self.agents, key=lambda a: a.fitness)
-        self.best_idx = self.agents.index(best)
+            if agent.laps > best_laps:
+                best_laps = agent.laps
 
-        return alive_count  # 0 → time to breed
+        # End generation when leader finishes max_laps
+        if best_laps >= self.max_laps:
+            return 0
+
+        # Identify best agent (by sort_key — laps then lap time)
+        if self.agents:
+            best       = max(self.agents, key=lambda a: a.sort_key)
+            self._best = best
+
+        return alive_count
 
     # ── Breed next generation ─────────────────────────────────────────────────
 
     def breed(self):
-        # Sort by fitness descending
-        ranked = sorted(self.agents, key=lambda a: a.fitness, reverse=True)
+        ranked = sorted(self.agents, key=lambda a: a.sort_key, reverse=True)
 
         self.gen_best_fitness = ranked[0].fitness
         self.fitness_history.append(self.gen_best_fitness)
 
-        if ranked[0].best_lap_s is not None:
-            if (self.all_time_best_lap is None or
-                    ranked[0].best_lap_s < self.all_time_best_lap):
-                self.all_time_best_lap = ranked[0].best_lap_s
+        # Update all-time best lap
+        for ag in ranked:
+            if ag.best_lap_s is not None:
+                if (self.all_time_best_lap is None or
+                        ag.best_lap_s < self.all_time_best_lap):
+                    self.all_time_best_lap = ag.best_lap_s
 
         self.generation += 1
 
-        # Mutation rate scales with driver_risk (1→10 maps to 0.6x→1.8x base)
-        risk     = self.params.get("driver_risk", 5)
-        mut_scale= 0.6 + (risk - 1) / 9 * 1.2    # 0.6 .. 1.8
-        mut_std  = MUTATION_BASE * mut_scale
+        # Dynamic population resize
+        num = int(self.params.get("num_agents", DEFAULT_NUM_AGENTS))
+        self.max_laps = int(self.params.get("max_laps", DEFAULT_MAX_LAPS))
 
-        elites = [a.brain.weights.copy() for a in ranked[:ELITE_COUNT]]
-        new_weights = list(elites)   # elites survive unchanged
+        # Mutation rate driven by driver_risk (1→0.6× base, 10→1.8× base)
+        risk      = float(self.params.get("driver_risk", 5))
+        mut_scale = 0.6 + (risk - 1) / 9.0 * 1.2
+        mut_std   = MUTATION_BASE * mut_scale
 
-        while len(new_weights) < NUM_AGENTS:
-            # Tournament selection from top half
-            pool = ranked[: max(2, len(ranked) // 2)]
-            pa   = np.random.choice(pool).brain.weights
-            pb   = np.random.choice(pool).brain.weights
+        # Elites: keep top ELITE_FRAC of current population unchanged
+        n_elite  = max(2, int(len(ranked) * ELITE_FRAC))
+        elites   = [a.brain.weights.copy() for a in ranked[:n_elite]]
+        new_w    = list(elites)
 
-            # Crossover
-            mask = np.random.rand(pa.size) < CROSSOVER_RATE
+        pool = ranked[: max(2, len(ranked) // 2)]
+
+        while len(new_w) < num:
+            pa  = np.random.choice(pool).brain.weights
+            pb  = np.random.choice(pool).brain.weights
+            mask  = np.random.rand(pa.size) < CROSSOVER_RATE
             child = np.where(mask, pa, pb).astype(np.float32)
+            child += np.random.randn(child.size).astype(np.float32) * mut_std
+            new_w.append(child)
 
-            # Mutation
-            noise = np.random.randn(child.size).astype(np.float32) * mut_std
-            child += noise
+        # Rebuild agents list to requested size
+        positions = self._start_grid(num)
+        new_agents = []
+        for i in range(num):
+            x, y, h = positions[i]
+            if i < len(self.agents):
+                ag = self.agents[i]
+                ag.reset(x, y, h, self.params)
+                ag.brain = Brain(new_w[i])
+            else:
+                car = Car(x, y, h, self.params)
+                ag  = Agent(car, Brain(new_w[i]))
+            new_agents.append(ag)
 
-            new_weights.append(child)
+        self.agents  = new_agents
+        self.num_agents = num
+        self.time_s  = 0.0
+        self._best   = self.agents[0] if self.agents else None
 
-        # Reset all agents with new brains
-        sx, sy, sh = self.start
-        for i, agent in enumerate(self.agents):
-            agent.reset(sx, sy, sh, self.params)
-            agent.brain = Brain(new_weights[i])
+    # ── Utilities ─────────────────────────────────────────────────────────────
 
-        self.time_s = 0.0
-        self.best_idx = 0
-
-    # ── Public helpers ────────────────────────────────────────────────────────
+    def kill_all(self):
+        """Immediately kill every car (triggers breed() in the main loop)."""
+        for ag in self.agents:
+            ag.car.alive = False
 
     def update_params(self, params: dict):
-        """Called when user changes car settings in the UI."""
-        self.params = params
-        sx, sy, sh  = get_start_pose(self.track)
-        self.start  = (sx, sy, sh)
-        # Restart generation with new params (keep brains)
-        for agent in self.agents:
-            agent.car.reset(sx, sy, sh)
-            agent.car.update_params(params)
-            agent.fitness = 0.0
-            agent.laps    = 0
+        """Apply new car parameters and restart generation (keep brains)."""
+        self.params    = params
+        self.max_laps  = int(params.get("max_laps",   DEFAULT_MAX_LAPS))
+        positions      = self._start_grid(len(self.agents))
+        for i, (ag, (x, y, h)) in enumerate(zip(self.agents, positions)):
+            ag.reset(x, y, h, params)
         self.time_s = 0.0
 
     def change_track(self, track: Track):
         self.track = track
-        sx, sy, sh = get_start_pose(track)
-        self.start = (sx, sy, sh)
-        for agent in self.agents:
-            brain_backup = agent.brain
-            agent.reset(sx, sy, sh, self.params)
-            agent.brain = brain_backup
+        positions  = self._start_grid(len(self.agents))
+        for ag, (x, y, h) in zip(self.agents, positions):
+            brain_bk = ag.brain
+            ag.reset(x, y, h, self.params)
+            ag.brain = brain_bk
         self.time_s = 0.0
 
     @property
@@ -295,4 +350,6 @@ class PopulationManager:
 
     @property
     def best_agent(self) -> Agent:
-        return self.agents[self.best_idx]
+        if not hasattr(self, "_best") or self._best is None:
+            self._best = max(self.agents, key=lambda a: a.sort_key)
+        return self._best
