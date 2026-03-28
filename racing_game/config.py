@@ -44,9 +44,9 @@ CAR_DEFAULTS = {
 
 # Tyre grip coefficient (Pacejka D-factor scale)
 TYRE_GRIP = {
-    "soft":   1.45,
-    "medium": 1.10,
-    "hard":   0.80,
+    "soft":   1.65,   # racing slick
+    "medium": 1.35,   # sport racing
+    "hard":   1.05,   # hard slick
 }
 
 OPTIMAL_PRESSURE      = 23.0

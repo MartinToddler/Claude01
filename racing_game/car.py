@@ -153,6 +153,10 @@ class Car:
         F_brake   = self.mass * G * 0.90 * brake * (1.0 if self.vx > 0 else 0.0)
         F_aero    = -0.5 * VEH_CD * VEH_A_FRONT * 1.225 * self.vx * abs(self.vx)
 
+        # Rolling resistance: ~1.5% of total weight, opposes motion
+        F_roll = (-math.copysign(1.0, self.vx) * 0.015 * Fz_total
+                  if abs(self.vx) > 0.3 else 0.0)
+
         ff, rf    = DRIVE_SPLIT.get(self.drive_type, (0.0, 1.0))
         F_xf_drv  = F_drive * ff
         F_xr_drv  = F_drive * rf
@@ -163,7 +167,7 @@ class Car:
 
         F_xf = F_xf_drv - F_xf_brk + F_xf_aero
         F_xr = F_xr_drv - F_xr_brk + F_xr_aero
-        Fx   = F_xf + F_xr            # total longitudinal force at CG
+        Fx   = F_xf + F_xr + F_roll   # total longitudinal force at CG
 
         # ── Friction circle: reduce lateral grip on driven axle ───────────
         # Available lateral = sqrt(D² - Fx_axle²)
@@ -195,12 +199,13 @@ class Car:
         self.vx    = max(-15.0, self.vx)
         self.omega = max(-6.0,  min(6.0,  self.omega))
 
-        # Yaw damping: tyres self-align; omega decays naturally at low speed
-        self.omega *= 0.93
+        # Yaw damping: tyres self-align; 0.98/frame = ~30% retention/s at 60fps
+        # (was 0.93 = 2.5%/s — too aggressive, killed cornering yaw rate)
+        self.omega *= 0.98
 
-        # Lateral velocity damping: stronger at low speed (tyres grip more),
-        # weaker at high speed (drifting is sustained by forward momentum)
-        vy_damp = 0.92 + 0.07 * min(1.0, abs(self.vx) / 20.0)
+        # Lateral velocity damping: less aggressive than before (was 0.92-0.99)
+        # Rolling resistance now handles low-speed stabilisation
+        vy_damp = 0.97 + 0.02 * min(1.0, abs(self.vx) / 20.0)
         self.vy *= vy_damp
 
         # ── Heading + position ────────────────────────────────────────────

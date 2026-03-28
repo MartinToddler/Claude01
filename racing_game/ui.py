@@ -380,14 +380,10 @@ class LeftPanel:
                 info.place(x + w + 10, y + h // 2)
             y += h + 4
 
+        # ── POWERTRAIN ────────────────────────────────────────────────────────
         sl(self.s_power)
-        sl(self.s_pressure)
-        sl(self.s_downforce)
-        sl(self.s_risk)
-
-        # Tyre compound
-        y += 6
-        row3(self.tyre_btns, self.tyre_info, 22)
+        row3(self.eng_btns,   self.eng_info,   22)
+        row3(self.drive_btns, self.drive_info, 22)
 
         # Gear ratios + final drive
         y += 4
@@ -395,29 +391,37 @@ class LeftPanel:
         self.gear_row.layout(x, y, w)
         y += 3 * 34 + 8 + 34 + 10   # 3 gear rows + final drive row
 
-        # Drive type
-        y += 2
-        row3(self.drive_btns, self.drive_info, 22)
+        # ── thin separator ────────────────────────────────────────────────────
+        self._sep1_y = y + 4
+        y += 12
 
-        # Engine position
-        row3(self.eng_btns, self.eng_info, 22)
+        # ── TYRES ─────────────────────────────────────────────────────────────
+        y += 6
+        row3(self.tyre_btns, self.tyre_info, 22)
+        sl(self.s_pressure)
+        sl(self.s_downforce)
 
-        # Track
+        # ── thin separator ────────────────────────────────────────────────────
+        self._sep2_y = y + 4
+        y += 12
+
+        # ── TRACK ─────────────────────────────────────────────────────────────
         y += 4
         tw = (w - 8) // len(TRACK_NAMES)
         for i, btn in enumerate(self.track_btns.values()):
             btn.set_rect(x + i * (tw + 4), y, tw, 22)
         y += 28
 
-        # ── Divider ──────────────────────────────────────────────────────
+        # ── main divider ──────────────────────────────────────────────────────
         self._div_y = y
         y += 14
 
-        # Sim speed buttons
+        # ── SIMULATION ────────────────────────────────────────────────────────
         self._speed_label_y = y - 12
         self.speed_row.layout(x, y, w)
         y += 28
 
+        sl(self.s_risk)
         sl(self.s_num)
         sl(self.s_laps)
 
@@ -437,40 +441,52 @@ class LeftPanel:
 
         _txt(surf, "CAR SETUP", self.PAD, 12, 13, C["accent"], bold=True)
 
+        # ── Powertrain ────────────────────────────────────────────────────────
         self.s_power.draw(surf)
-        self.s_pressure.draw(surf)
-        self.s_downforce.draw(surf)
-        self.s_risk.draw(surf)
-
-        t0 = list(self.tyre_btns.values())[0]
-        _txt(surf, "COMPOUND", self.PAD, t0.rect.y - 13, 10, C["text_dim"])
-        for btn in self.tyre_btns.values(): btn.draw(surf)
-        self.tyre_info.draw(surf)
-
-        _txt(surf, "GEAR RATIOS", self.PAD, self._gear_y - 13, 10, C["text_dim"])
-        self.gear_row.draw(surf)
-
-        d0 = list(self.drive_btns.values())[0]
-        _txt(surf, "DRIVE TYPE", self.PAD, d0.rect.y - 13, 10, C["text_dim"])
-        for btn in self.drive_btns.values(): btn.draw(surf)
-        self.drive_info.draw(surf)
 
         e0 = list(self.eng_btns.values())[0]
         _txt(surf, "ENGINE POS", self.PAD, e0.rect.y - 13, 10, C["text_dim"])
         for btn in self.eng_btns.values(): btn.draw(surf)
         self.eng_info.draw(surf)
 
+        d0 = list(self.drive_btns.values())[0]
+        _txt(surf, "DRIVE TYPE", self.PAD, d0.rect.y - 13, 10, C["text_dim"])
+        for btn in self.drive_btns.values(): btn.draw(surf)
+        self.drive_info.draw(surf)
+
+        _txt(surf, "GEAR RATIOS", self.PAD, self._gear_y - 13, 10, C["text_dim"])
+        self.gear_row.draw(surf)
+
+        # ── thin separator ────────────────────────────────────────────────────
+        pygame.draw.line(surf, C["panel_border"],
+                         (self.PAD, self._sep1_y), (self.W - self.PAD, self._sep1_y), 1)
+
+        # ── Tyres ─────────────────────────────────────────────────────────────
+        t0 = list(self.tyre_btns.values())[0]
+        _txt(surf, "COMPOUND", self.PAD, t0.rect.y - 13, 10, C["text_dim"])
+        for btn in self.tyre_btns.values(): btn.draw(surf)
+        self.tyre_info.draw(surf)
+
+        self.s_pressure.draw(surf)
+        self.s_downforce.draw(surf)
+
+        # ── thin separator ────────────────────────────────────────────────────
+        pygame.draw.line(surf, C["panel_border"],
+                         (self.PAD, self._sep2_y), (self.W - self.PAD, self._sep2_y), 1)
+
+        # ── Track ─────────────────────────────────────────────────────────────
         t0 = list(self.track_btns.values())[0]
         _txt(surf, "TRACK", self.PAD, t0.rect.y - 13, 10, C["text_dim"])
         for btn in self.track_btns.values(): btn.draw(surf)
 
-        # Divider
+        # ── main divider ──────────────────────────────────────────────────────
         pygame.draw.line(surf, C["panel_border"],
                          (self.PAD, self._div_y), (self.W - self.PAD, self._div_y), 1)
         _txt(surf, "SIMULATION", self.PAD, self._div_y + 3, 10, C["text_dim"], bold=True)
 
         _txt(surf, "Speed", self.PAD, self._speed_label_y, 10, C["text_dim"])
         self.speed_row.draw(surf)
+        self.s_risk.draw(surf)
         self.s_num.draw(surf)
         self.s_laps.draw(surf)
 
