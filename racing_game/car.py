@@ -173,6 +173,14 @@ class Car:
         Fyf = -self._pacejka(alpha_f, Df_avail)
         Fyr = -self._pacejka(alpha_r, Dr_avail)
 
+        # ── Low-speed lateral force scaling ──────────────────────────────
+        # Tyre lateral forces must go to zero as vehicle speed → 0.
+        # Without this, Pacejka generates full force at standstill due to
+        # vx_safe clamp, causing unrealistic perpetual spinning.
+        speed_factor = min(1.0, abs(self.vx) / 4.0)
+        Fyf *= speed_factor
+        Fyr *= speed_factor
+
         # ── Equations of motion (vehicle body frame) ──────────────────────
         ax    = Fx / self.mass + self.vy * self.omega
         ay    = (Fyf + Fyr) / self.mass - self.vx * self.omega
@@ -186,7 +194,14 @@ class Car:
 
         self.vx    = max(-15.0, self.vx)
         self.omega = max(-6.0,  min(6.0,  self.omega))
-        self.vy   *= 0.97
+
+        # Yaw damping: tyres self-align; omega decays naturally at low speed
+        self.omega *= 0.93
+
+        # Lateral velocity damping: stronger at low speed (tyres grip more),
+        # weaker at high speed (drifting is sustained by forward momentum)
+        vy_damp = 0.92 + 0.07 * min(1.0, abs(self.vx) / 20.0)
+        self.vy *= vy_damp
 
         # ── Heading + position ────────────────────────────────────────────
         self.heading += self.omega * dt
