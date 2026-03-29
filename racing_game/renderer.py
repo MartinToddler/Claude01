@@ -147,11 +147,12 @@ class Renderer:
                  player=None, cam: Camera | None = None) -> tuple[int, bool]:
         from car import Car
         R2 = (Car.LENGTH_PX + 4) ** 2
-        cam_x = cam.world_x if cam else 0
-        cam_y = cam.world_y if cam else 0
-        # Convert screen → world
-        wx = mx - TRACK_AREA_X + cam_x
-        wy = my + cam_y
+        # Convert screen → world (zoom-aware)
+        if cam:
+            wx, wy = cam.screen_to_world(mx, my)
+        else:
+            wx = mx - TRACK_AREA_X
+            wy = float(my)
 
         if player is not None and player.enabled:
             dx = wx - player.car.x
@@ -170,6 +171,7 @@ class Renderer:
 
     def _draw_agents(self, pop: PopulationManager, cam: Camera | None):
         best    = pop.best_agent
+        zoom    = cam.zoom if cam else 1.0
         ranked  = sorted(
             [(i, ag) for i, ag in enumerate(pop.agents)],
             key=lambda x: -x[1].fitness
@@ -188,33 +190,36 @@ class Renderer:
             sx, sy = _w2s(car.x, car.y, cam)
 
             if not car.alive:
-                self._draw_car_f1_ghost(sx, sy, car.heading, 0.0, color)
+                self._draw_car_f1_ghost(sx, sy, car.heading, 0.0, color, zoom)
             elif detail_rank < FULL_DETAIL:
                 self._draw_car_f1(sx, sy, car.heading,
                                   getattr(car, "delta", 0.0),
-                                  color, is_best, is_sel)
+                                  color, is_best, is_sel, zoom)
                 if self.show_rays and (is_best or is_sel):
                     self._draw_rays(car, pop.track, cam)
             else:
-                # Tiny dot for background cars
-                pygame.draw.circle(self.surface, color, (sx, sy), 3)
+                # Tiny dot for background cars (scale dot size with zoom)
+                r = max(1, int(3 * zoom))
+                pygame.draw.circle(self.surface, color, (sx, sy), r)
 
     # ── F1 car drawing ────────────────────────────────────────────────────────
 
     def _draw_car_f1(self, sx: int, sy: int,
                      heading: float, delta: float,
-                     color, is_best: bool, is_sel: bool):
+                     color, is_best: bool, is_sel: bool, zoom: float = 1.0):
         """Draw an open-wheel F1-style car at screen position (sx, sy)."""
+        z  = max(0.25, zoom)          # never draw smaller than ×0.25
         ch, sh = math.cos(heading), math.sin(heading)
 
         def rot(lx, ly):
             """Rotate local offset (lx=fwd, ly=left) → screen coords."""
-            return (sx + int(lx * ch - ly * sh),
-                    sy + int(lx * sh + ly * ch))
+            return (sx + int(lx * z * ch - ly * z * sh),
+                    sy + int(lx * z * sh + ly * z * ch))
 
         # Selection circle
         if is_sel:
-            pygame.draw.circle(self.surface, (255, 255, 80), (sx, sy), 18, 2)
+            pygame.draw.circle(self.surface, (255, 255, 80),
+                                (sx, sy), max(3, int(18 * z)), 2)
 
         # Rear wing (wide bar at back)
         rw = [rot(-8, -7), rot(-6, -7), rot(-6, 7), rot(-8, 7)]
@@ -236,16 +241,17 @@ class Renderer:
 
         # Rear wheels (aligned with car heading)
         for side in (-1, 1):
-            self._draw_wheel(sx, sy, heading, 0.0, -6, side * 5, 3, 1.5, False)
+            self._draw_wheel(sx, sy, heading, 0.0, -6, side * 5, 3, 1.5, False, z)
 
         # Front wheels (rotated by steering angle delta)
         for side in (-1, 1):
-            self._draw_wheel(sx, sy, heading, delta, 6, side * 5, 3, 1.5, True)
+            self._draw_wheel(sx, sy, heading, delta, 6, side * 5, 3, 1.5, True, z)
 
         # Direction nub
-        nx = sx + int(9 * ch)
-        ny = sy + int(9 * sh)
-        pygame.draw.circle(self.surface, (255, 255, 255), (nx, ny), 1)
+        nx = sx + int(9 * z * ch)
+        ny = sy + int(9 * z * sh)
+        pygame.draw.circle(self.surface, (255, 255, 255), (nx, ny), max(1, int(z)))
+
 
         # Outline for best / selected
         if is_best:
@@ -254,39 +260,44 @@ class Renderer:
             pygame.draw.polygon(self.surface, (255, 255, 80), body, 1)
 
     def _draw_wheel(self, sx, sy, heading, delta,
-                    fwd_offset, lat_offset, half_len, half_w, steered):
-        """Draw a single wheel rectangle."""
+                    fwd_offset, lat_offset, half_len, half_w, steered,
+                    zoom: float = 1.0):
+        """Draw a single wheel rectangle, scaled by zoom."""
+        z  = zoom
         ch, sh = math.cos(heading), math.sin(heading)
         # Wheel centre in screen coords
-        cx = sx + int(fwd_offset * ch - lat_offset * sh)
-        cy = sy + int(fwd_offset * sh + lat_offset * ch)
+        cx = sx + int(fwd_offset * z * ch - lat_offset * z * sh)
+        cy = sy + int(fwd_offset * z * sh + lat_offset * z * ch)
 
-        wa = heading + delta if steered else heading
+        wa   = heading + delta if steered else heading
         wc, ws = math.cos(wa), math.sin(wa)
         sign = 1 if lat_offset >= 0 else -1
+        hl   = half_len * z
+        hw   = half_w   * z
 
         corners = [
-            (cx + int( half_len * wc - half_w * ws * sign),
-             cy + int( half_len * ws + half_w * wc * sign)),
-            (cx + int(-half_len * wc - half_w * ws * sign),
-             cy + int(-half_len * ws + half_w * wc * sign)),
-            (cx + int(-half_len * wc + half_w * ws * sign),
-             cy + int(-half_len * ws - half_w * wc * sign)),
-            (cx + int( half_len * wc + half_w * ws * sign),
-             cy + int( half_len * ws - half_w * wc * sign)),
+            (cx + int( hl * wc - hw * ws * sign),
+             cy + int( hl * ws + hw * wc * sign)),
+            (cx + int(-hl * wc - hw * ws * sign),
+             cy + int(-hl * ws + hw * wc * sign)),
+            (cx + int(-hl * wc + hw * ws * sign),
+             cy + int(-hl * ws - hw * wc * sign)),
+            (cx + int( hl * wc + hw * ws * sign),
+             cy + int( hl * ws - hw * wc * sign)),
         ]
         pygame.draw.polygon(self.surface, (40, 40, 40), corners)
         pygame.draw.polygon(self.surface, (80, 80, 80), corners, 1)
 
-    def _draw_car_f1_ghost(self, sx, sy, heading, delta, color):
+    def _draw_car_f1_ghost(self, sx, sy, heading, delta, color, zoom: float = 1.0):
         """Semi-transparent ghost for crashed cars."""
+        z  = max(0.25, zoom)
         ghost = pygame.Surface((TRACK_AREA_W, TRACK_AREA_H), pygame.SRCALPHA)
         ch, sh = math.cos(heading), math.sin(heading)
 
         def rot(lx, ly):
             gx = sx - TRACK_AREA_X
-            return (gx + int(lx * ch - ly * sh),
-                    sy + int(lx * sh + ly * ch))
+            return (gx + int(lx * z * ch - ly * z * sh),
+                    sy + int(lx * z * sh + ly * z * ch))
 
         r, g, b = color
         body = [rot(-7, -2), rot(8, -2), rot(8, 2), rot(-7, 2)]
@@ -308,17 +319,20 @@ class Renderer:
     def draw_player(self, player, cam: Camera | None = None):
         car    = player.car
         sx, sy = _w2s(car.x, car.y, cam)
+        zoom   = cam.zoom if cam else 1.0
 
         # Glow
-        pygame.draw.circle(self.surface, C["player"], (sx, sy), 20, 2)
+        pygame.draw.circle(self.surface, C["player"],
+                            (sx, sy), max(3, int(20 * zoom)), 2)
         # Draw as F1 but in cyan
         self._draw_car_f1(sx, sy, car.heading,
                           getattr(car, "delta", 0.0),
-                          C["player"], False, False)
-        pygame.draw.circle(self.surface, (255, 255, 255), (sx, sy - 22), 5, 1)
+                          C["player"], False, False, zoom)
+        oy = max(5, int(22 * zoom))
+        pygame.draw.circle(self.surface, (255, 255, 255), (sx, sy - oy), 5, 1)
 
         lbl = _font(11).render("P", True, (255, 255, 255))
-        self.surface.blit(lbl, (sx - lbl.get_width() // 2, sy - 22))
+        self.surface.blit(lbl, (sx - lbl.get_width() // 2, sy - oy))
 
         rc = player.respawn_countdown
         if rc is not None:

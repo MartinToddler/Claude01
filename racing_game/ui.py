@@ -485,11 +485,19 @@ class LeftPanel:
         y += 16
 
         # ── TRACK ─────────────────────────────────────────────────────────────
+        # Two rows of 3 buttons each
         y += 4
-        tw = (w - 8) // len(TRACK_NAMES)
-        for i, btn in enumerate(self.track_btns.values()):
-            btn.set_rect(x + i * (tw + 4), y, tw, 22)
-        y += 28
+        names   = list(TRACK_NAMES)
+        per_row = 3
+        for row in range(2):
+            row_names = names[row * per_row : (row + 1) * per_row]
+            n_in_row  = len(row_names)
+            if n_in_row == 0:
+                break
+            tw = (w - 4 * (n_in_row - 1)) // n_in_row
+            for col, name in enumerate(row_names):
+                self.track_btns[name].set_rect(x + col * (tw + 4), y, tw, 22)
+            y += 26
 
         # ── main divider ──────────────────────────────────────────────────────
         self._div_y = y

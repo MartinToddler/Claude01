@@ -80,6 +80,52 @@ _TRACKS = {
         (0.20, 0.28), (0.28, 0.18), (0.40, 0.12),
     ],
 
+    # ── Laguna Seca Raceway ───────────────────────────────────────────────────
+    # 3.6 km technical circuit. Signature: Corkscrew (T8A/9) — blind crest
+    # followed by sharp downhill chicane.  World: 1600 × 1200 px.
+    "Laguna": [
+        # Start/Finish straight → Turn 1 (hard right)
+        (0.22, 0.36), (0.34, 0.28), (0.46, 0.20),
+        # Turn 2 sweeping right
+        (0.60, 0.18), (0.72, 0.22),
+        # Turn 3 left kink
+        (0.78, 0.30),
+        # Turn 4 (right) → back section
+        (0.82, 0.40), (0.80, 0.50),
+        # Turn 5 left
+        (0.74, 0.56),
+        # Turn 6 right
+        (0.80, 0.64),
+        # Turn 7 left
+        (0.74, 0.71),
+        # Corkscrew T8A: blind right at crest
+        (0.68, 0.78),
+        # Corkscrew T9: sharp left going downhill
+        (0.57, 0.84), (0.45, 0.86),
+        # Turn 10: wide sweeping right
+        (0.34, 0.82), (0.24, 0.76),
+        # Turn 11: very slow hairpin (tightest corner)
+        (0.16, 0.68), (0.13, 0.58), (0.15, 0.49),
+        # Return on pit-straight
+        (0.16, 0.42),
+    ],
+
+    # ── SuperOval (fictional 20 km superspeedway) ────────────────────────────
+    # World: 10 000 × 3 000 px.  1 px ≈ 1 m.
+    # Two long straights + wide banked turns → total length ≈ 20 km.
+    "SuperOval": [
+        # Start/finish on bottom straight (left to right)
+        (0.14, 0.72), (0.30, 0.75), (0.50, 0.76),
+        (0.70, 0.75), (0.86, 0.72),
+        # Right banked turn
+        (0.94, 0.63), (0.97, 0.52), (0.94, 0.41),
+        # Top straight (right to left)
+        (0.86, 0.32), (0.70, 0.29), (0.50, 0.28),
+        (0.30, 0.29), (0.14, 0.32),
+        # Left banked turn
+        (0.06, 0.41), (0.03, 0.52), (0.06, 0.63),
+    ],
+
     # ── NASCAR Daytona International Speedway (tri-oval) ─────────────────────
     # Real proportions: ~2.5 miles, tri-oval shape.
     # World size: 4800 × 2600 px.  One car-length (18 px) ≈ 5 m → 1 px ≈ 0.28 m.
@@ -104,10 +150,22 @@ _TRACKS = {
 
 # World dimensions per track (width × height in px)
 _WORLD_SIZES = {
-    "Oval":    (TRACK_AREA_W, TRACK_AREA_H),
-    "Monza":   (TRACK_AREA_W, TRACK_AREA_H),
-    "Monaco":  (TRACK_AREA_W, TRACK_AREA_H),
-    "Daytona": (4800, 2600),
+    "Oval":      (TRACK_AREA_W, TRACK_AREA_H),
+    "Monza":     (TRACK_AREA_W, TRACK_AREA_H),
+    "Monaco":    (TRACK_AREA_W, TRACK_AREA_H),
+    "Laguna":    (1600, 1200),
+    "SuperOval": (14000, 4200),
+    "Daytona":   (4800, 2600),
+}
+
+# Half-width of the driveable surface per track (px)
+_TRACK_HALF_W = {
+    "Oval":      60,
+    "Monza":     55,
+    "Monaco":    45,
+    "Laguna":    45,
+    "SuperOval": 80,
+    "Daytona":   70,
 }
 
 TRACK_NAMES = list(_TRACKS.keys())
@@ -274,7 +332,9 @@ def build_track(name: str, samples_per_seg: int = 50) -> Track:
       • For standard tracks (Oval / Monza / Monaco): world = viewport size
         (TRACK_AREA_W × TRACK_AREA_H).  No TRACK_AREA_X offset is baked in;
         the camera/renderer adds that offset externally.
-      • For Daytona: world = 4800 × 2600 px (camera scrolls to follow cars).
+      • For Laguna: world = 1600 × 1200 px.
+      • For Daytona: world = 4800 × 2600 px.
+      • For SuperOval: world = 10 000 × 3 000 px (camera must scroll).
     """
     ctrl = _TRACKS[name]
     raw  = _spline_points(ctrl, samples_per_seg)   # (N, 2) in [0,1]²
@@ -296,7 +356,8 @@ def build_track(name: str, samples_per_seg: int = 50) -> Track:
 
     pts = scaled + np.array([offset_x, offset_y])
 
-    return Track(name, pts, TRACK_HALF_W, world_w, world_h)
+    half_w = _TRACK_HALF_W.get(name, TRACK_HALF_W)
+    return Track(name, pts, half_w, world_w, world_h)
 
 
 def get_start_pose(track: Track):
