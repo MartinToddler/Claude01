@@ -17,8 +17,8 @@ import pygame
 from config import (
     C, SCREEN_W, SCREEN_H, LEFT_PANEL_W, RIGHT_PANEL_W,
     TRACK_AREA_X, TRACK_AREA_W, CAR_DEFAULTS,
-    DEFAULT_NUM_AGENTS, DEFAULT_MAX_LAPS, SIM_SPEEDS,
-    TOOLTIPS,
+    DEFAULT_NUM_AGENTS, DEFAULT_MAX_LAPS, DEFAULT_CAUTION,
+    SIM_SPEEDS, TOOLTIPS,
 )
 from track import TRACK_NAMES
 
@@ -244,6 +244,75 @@ class SpeedButtons:
         return self._buttons[0].rect.y if self._buttons else 0
 
 
+# ── Step counter (num agents: smart +/- buttons) ─────────────────────────────
+
+class StepCounter:
+    """
+    Numeric display with − / + buttons.  Step size adapts to current value:
+      value ≤ 20  → step 1
+      value ≤ 100 → step 5
+      value > 100 → step 50
+    """
+    H = 22
+
+    def __init__(self, label: str, vmin: int, vmax: int, value: int,
+                 tip_id: str | None = None):
+        self.label  = label
+        self.vmin   = vmin
+        self.vmax   = vmax
+        self.value  = int(value)
+        self._rect  = pygame.Rect(0, 0, 100, self.H)
+        self._btn_m = pygame.Rect(0, 0, 22, self.H)   # minus
+        self._btn_p = pygame.Rect(0, 0, 22, self.H)   # plus
+        self.info   = InfoBtn(tip_id) if tip_id else None
+
+    def set_rect(self, x: int, y: int, w: int):
+        self._rect  = pygame.Rect(x, y, w, self.H)
+        self._btn_m = pygame.Rect(x,           y, 22, self.H)
+        self._btn_p = pygame.Rect(x + w - 22,  y, 22, self.H)
+        if self.info:
+            self.info.place(x + w + 10, y - 5)
+
+    def _step(self) -> int:
+        if self.value <= 20:  return 1
+        if self.value <= 100: return 5
+        return 50
+
+    def draw(self, surf):
+        r  = self._rect
+        # Background of numeric display
+        pygame.draw.rect(surf, C["panel_border"], r, 0, 4)
+        pygame.draw.rect(surf, C["accent"],       r, 1, 4)
+        # − button
+        pygame.draw.rect(surf, C["bad"],  self._btn_m, 0, 3)
+        ts_m = _f(13, True).render("−", True, C["text"])
+        surf.blit(ts_m, (self._btn_m.centerx - ts_m.get_width() // 2,
+                         self._btn_m.centery - ts_m.get_height() // 2))
+        # + button
+        pygame.draw.rect(surf, C["good"], self._btn_p, 0, 3)
+        ts_p = _f(13, True).render("+", True, C["text"])
+        surf.blit(ts_p, (self._btn_p.centerx - ts_p.get_width() // 2,
+                         self._btn_p.centery - ts_p.get_height() // 2))
+        # Value
+        vs = _f(12, True).render(str(self.value), True, C["text"])
+        surf.blit(vs, (r.centerx - vs.get_width() // 2,
+                       r.centery - vs.get_height() // 2))
+        # Label above
+        _txt(surf, self.label, r.x, r.y - 13, 11, C["text_dim"])
+        if self.info:
+            self.info.draw(surf)
+
+    def handle_event(self, event) -> bool:
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self._btn_m.collidepoint(event.pos):
+                self.value = max(self.vmin, self.value - self._step())
+                return True
+            if self._btn_p.collidepoint(event.pos):
+                self.value = min(self.vmax, self.value + self._step())
+                return True
+        return False
+
+
 # ── Gear ratio row ─────────────────────────────────────────────────────────────
 
 class GearRatioRow:
@@ -339,9 +408,12 @@ class LeftPanel:
 
         # Simulation section
         self.speed_row   = SpeedButtons(tip_id="sim_speed")
-        self.s_num       = Slider("Num Cars",       5, 50,
-                                  DEFAULT_NUM_AGENTS, ".0f", C["warn"],
-                                  tip_id="num_agents")
+        self.s_caution   = Slider("Driver Caution",  1, 10,
+                                  DEFAULT_CAUTION,   ".0f", C["warn"],
+                                  tip_id="caution")
+        self.num_agents  = StepCounter("Num Cars", 1, 1000,
+                                       DEFAULT_NUM_AGENTS,
+                                       tip_id="num_agents")
         self.s_laps      = Slider("Max Laps/Gen",   1, 20,
                                   DEFAULT_MAX_LAPS,  ".0f", C["good"],
                                   tip_id="max_laps")
@@ -426,7 +498,13 @@ class LeftPanel:
         y += 28
 
         sl(self.s_risk)
-        sl(self.s_num)
+        sl(self.s_caution)
+
+        # Num Cars step counter
+        y += 16
+        self.num_agents.set_rect(x, y, w)
+        y += self.num_agents.H + 3
+
         sl(self.s_laps)
 
         y += 6
@@ -493,7 +571,8 @@ class LeftPanel:
 
         self.speed_row.draw(surf)
         self.s_risk.draw(surf)
-        self.s_num.draw(surf)
+        self.s_caution.draw(surf)
+        self.num_agents.draw(surf)
         self.s_laps.draw(surf)
 
         # State-dependent button labels
@@ -528,13 +607,14 @@ class LeftPanel:
         )}
 
         # Performance sliders
-        for s in (self.s_power, self.s_pressure, self.s_downforce, self.s_risk):
+        for s in (self.s_power, self.s_pressure, self.s_downforce,
+                  self.s_risk, self.s_caution):
             if s.handle_event(event): result["params_changed"] = True
 
-        if self.gear_row.handle_event(event): result["params_changed"] = True
-        if self.speed_row.handle_event(event): result["speed_changed"] = True
-        if self.s_num.handle_event(event):     result["params_changed"] = True
-        if self.s_laps.handle_event(event):    result["params_changed"] = True
+        if self.gear_row.handle_event(event):   result["params_changed"] = True
+        if self.speed_row.handle_event(event):  result["speed_changed"]  = True
+        if self.num_agents.handle_event(event): result["params_changed"] = True
+        if self.s_laps.handle_event(event):     result["params_changed"] = True
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             pos = event.pos
@@ -594,8 +674,9 @@ class LeftPanel:
     def _all_info_btns(self):
         """Iterate over all InfoBtn instances in this panel."""
         for s in (self.s_power, self.s_pressure, self.s_downforce,
-                  self.s_risk, self.s_num, self.s_laps):
+                  self.s_risk, self.s_caution, self.s_laps):
             if s.info: yield s.info
+        if self.num_agents.info: yield self.num_agents.info
         if self.tyre_info: yield self.tyre_info
         if self.drive_info: yield self.drive_info
         if self.eng_info: yield self.eng_info
@@ -618,7 +699,8 @@ class LeftPanel:
         p["final_drive"]     = self.gear_row.final_drive
         p["drive_type"]      = self.drive_type
         p["engine_pos"]      = self.engine_pos
-        p["num_agents"]      = int(self.s_num.value)
+        p["caution"]         = int(self.s_caution.value)
+        p["num_agents"]      = self.num_agents.value
         p["max_laps"]        = int(self.s_laps.value)
         layers = self.nn_config["layers"]
         p["nn_hidden_sizes"] = self.nn_config["sizes"][:layers]

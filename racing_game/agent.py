@@ -22,6 +22,7 @@ from config import (
     RAYCAST_COUNT, RAYCAST_DIST,
     STUCK_SPEED, STUCK_TIME,
     DEFAULT_NUM_AGENTS, DEFAULT_MAX_LAPS,
+    DEFAULT_CAUTION,
 )
 from car import Car
 from track import Track, get_start_pose
@@ -70,6 +71,18 @@ class Brain:
             idx += c
         return Ws, Bs
 
+    def _unpack_layer(self, layer_idx: int):
+        """Return (W, b) matrices for a single layer (for batch inference)."""
+        idx = 0
+        for i, (r, c) in enumerate(self._shapes):
+            W = self.weights[idx: idx + r * c].reshape(r, c)
+            idx += r * c
+            b = self.weights[idx: idx + c]
+            idx += c
+            if i == layer_idx:
+                return W, b
+        raise IndexError(f"Layer {layer_idx} out of range")
+
     def forward(self, x: np.ndarray) -> np.ndarray:
         Ws, Bs = self._unpack()
         h = x
@@ -110,8 +123,8 @@ class Agent:
         rays = np.zeros(RAYCAST_COUNT, dtype=np.float32)
         angle_step = math.pi / (RAYCAST_COUNT - 1)
         for i in range(RAYCAST_COUNT):
-            angle  = car.heading - math.pi / 2 + i * angle_step
-            rays[i] = track.raycast(car.x, car.y, angle, RAYCAST_DIST)
+            angle   = car.heading - math.pi / 2 + i * angle_step
+            rays[i] = track.raycast_fast(car.x, car.y, angle, RAYCAST_DIST)
 
         _, _, track_heading = track.project(car.x, car.y)
         heading_err = math.atan2(
@@ -133,10 +146,18 @@ class Agent:
             dtype=np.float32,
         )
 
-    def act(self, track: Track) -> tuple[float, float]:
+    def act(self, track: Track, params: dict | None = None) -> tuple[float, float]:
         inp = self.sense(track)
         out = self.brain.forward(inp)
-        return float(out[0]), float(out[1])  # throttle_brake, steer
+        tb  = float(out[0])
+        st  = float(out[1])
+        # Caution throttle cap: higher caution → lower max throttle
+        if params:
+            caution = float(params.get("caution", DEFAULT_CAUTION))
+            throttle_cap = 1.0 - (caution - 1) / 9.0 * 0.70  # 1.0 → 0.30
+            if tb > 0:
+                tb = min(tb, throttle_cap)
+        return tb, st
 
     # ── Fitness / lap tracking ────────────────────────────────────────────────
 
@@ -251,23 +272,31 @@ class PopulationManager:
         alive_count  = 0
         best_laps    = 0
 
-        for agent in self.agents:
-            if not agent.car.alive:
-                continue
-            alive_count += 1
+        # ── Batch NN inference for all alive agents ───────────────────────
+        alive_agents = [a for a in self.agents if a.car.alive]
+        if alive_agents:
+            # Collect inputs: (N, NN_INPUTS)
+            X = np.stack([a.sense(self.track) for a in alive_agents])
+            # Batch forward pass using einsum per layer
+            outputs = self._batch_forward(X, alive_agents[0].brain)
+            for a, out in zip(alive_agents, outputs):
+                tb = float(out[0])
+                st = float(out[1])
+                # Caution throttle cap
+                caution      = float(self.params.get("caution", DEFAULT_CAUTION))
+                throttle_cap = 1.0 - (caution - 1) / 9.0 * 0.70
+                if tb > 0:
+                    tb = min(tb, throttle_cap)
+                a.car.step(tb, st, dt)
+                a.car.update_stuck(dt, STUCK_SPEED, STUCK_TIME)
 
-            tb, st = agent.act(self.track)
-            agent.car.step(tb, st, dt)
-            agent.car.update_stuck(dt, STUCK_SPEED, STUCK_TIME)
-
-            if self.track.is_off_track(agent.car.x, agent.car.y):
-                agent.car.alive = False
-                continue
-
-            agent.update_fitness(self.track, self.time_s)
-
-            if agent.laps > best_laps:
-                best_laps = agent.laps
+                if self.track.is_off_track(a.car.x, a.car.y):
+                    a.car.alive = False
+                else:
+                    alive_count += 1
+                    a.update_fitness(self.track, self.time_s)
+                    if a.laps > best_laps:
+                        best_laps = a.laps
 
         # End generation when leader finishes max_laps
         if best_laps >= self.max_laps:
@@ -275,10 +304,37 @@ class PopulationManager:
 
         # Identify best agent (by sort_key — laps then lap time)
         if self.agents:
-            best       = max(self.agents, key=lambda a: a.sort_key)
-            self._best = best
+            self._best = max(self.agents, key=lambda a: a.sort_key)
 
         return alive_count
+
+    def _batch_forward(self, X: np.ndarray,
+                       reference_brain: "Brain") -> np.ndarray:
+        """
+        Batched NN forward pass for N agents simultaneously.
+        X: (N, inputs).  Returns (N, outputs).
+
+        Each agent has its own weights, so we build per-layer weight tensors
+        (N, in, out) and use np.einsum for a single BLAS call per layer.
+        Falls back to sequential if agents have different architectures.
+        """
+        alive = [a for a in self.agents if a.car.alive]
+        n     = len(alive)
+        if n == 0:
+            return X[:0]   # empty
+
+        n_layers = len(reference_brain._shapes)
+        h = X.copy()
+        for layer_idx in range(n_layers):
+            Ws, Bs = [], []
+            for a in alive:
+                w, b = a.brain._unpack_layer(layer_idx)
+                Ws.append(w); Bs.append(b)
+            W_stack = np.stack(Ws)   # (N, in, out)
+            B_stack = np.stack(Bs)   # (N, out)
+            # Batched matmul: h (N, in) × W (N, in, out) → (N, out)
+            h = np.tanh(np.einsum('ni,nio->no', h, W_stack) + B_stack)
+        return h
 
     # ── Breed next generation ─────────────────────────────────────────────────
 

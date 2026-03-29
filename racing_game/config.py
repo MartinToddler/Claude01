@@ -14,6 +14,7 @@ TRACK_AREA_X = LEFT_PANEL_W
 # ── Simulation ───────────────────────────────────────────────────────────────
 DEFAULT_NUM_AGENTS  = 20
 DEFAULT_MAX_LAPS    = 5
+DEFAULT_CAUTION     = 5    # 1=aggressive, 10=very cautious (throttle cap)
 
 # Discrete sim speed choices (physics steps per rendered frame)
 SIM_SPEEDS = [1, 2, 4, 10, 25, 50, 100]
@@ -35,6 +36,7 @@ CAR_DEFAULTS = {
     "tyre_pressure": 23.0,
     "downforce":     80,
     "driver_risk":   5,
+    "caution":       DEFAULT_CAUTION,
     "mass":          750,
     "drive_type":    "RWD",    # FWD | RWD | AWD
     "engine_pos":    "front",  # front | mid | rear
@@ -138,11 +140,18 @@ TOOLTIPS = {
         "Twarda (Hard): ×0.80 — trwała, ale najniższa przyczepność.\n"
         "Wpływa na czynnik D formuły Pacejki (szczytowa siła boczna)."
     ),
+    "caution": (
+        "Ostrożność kierowcy AI (1=agresywny, 10=bardzo ostrożny).\n"
+        "Ogranicza maksymalny gaz: caution=1 → pełny gaz dozwolony,\n"
+        "caution=10 → max ~30% gazu (bezpieczna jazda w zakrętach).\n"
+        "Niskie wartości = szybkie nauki, ale częste wypadki z toru.\n"
+        "Wysokie = wolniejsza nauka, ale więcej aut kończy okrążenia."
+    ),
     "num_agents": (
         "Liczba samochodów AI na generację.\n"
         "Więcej agentów = większa pula genów → lepsza dywersyfikacja\n"
         "→ szybsza konwergencja. Mniej = szybsze cykle generacyjne.\n"
-        "Zalecane: 15–30 dla dobrego bilansu."
+        "Użyj przycisków +/− obok wartości aby zmienić liczbę aut."
     ),
     "max_laps": (
         "Generacja kończy się gdy lider ukończy tyle okrążeń.\n"
@@ -227,3 +236,21 @@ C = {
 }
 
 TRACK_PADDING = 60
+
+
+def car_color(idx: int) -> tuple:
+    """Return a distinct color for car index idx (supports 1000+ cars)."""
+    palette = C["cars"]
+    if idx < len(palette):
+        return palette[idx]
+    # Generate additional colors via golden-ratio hue distribution
+    import math
+    h = (idx * 0.618033988749895) % 1.0   # golden ratio
+    # HSV → RGB (S=0.75, V=0.9)
+    s, v = 0.75, 0.90
+    i = int(h * 6)
+    f = h * 6 - i
+    p = v * (1 - s); q = v * (1 - f * s); t = v * (1 - (1 - f) * s)
+    rgb = [(v, t, p), (q, v, p), (p, v, t),
+           (p, q, v), (t, p, v), (v, p, q)][i % 6]
+    return tuple(int(c * 255) for c in rgb)

@@ -1,5 +1,14 @@
 """
-Racing Game AI — main entry point v3.
+Racing Game AI — main entry point v4.
+
+New in v4:
+  • Camera system: viewport follows selected AI car, best car, or player car.
+    For large tracks (Daytona) the camera scrolls to keep the target visible.
+    Middle-mouse drag pans the camera when no car is targeted.
+  • F1 / open-wheel car visuals with visible front-wheel steering angle.
+  • Driver Caution parameter (1-10) limits max throttle for safer cornering.
+  • 500-1000 car support via batched NN inference + viewport culling.
+  • Daytona Speedway track (4800 × 2600 px world).
 
 Keyboard shortcuts:
     SPACE       pause / resume
@@ -12,6 +21,7 @@ Keyboard shortcuts:
     ESC         quit
     CLICK       select AI car or player car for detailed telemetry
                 (click selected again or empty area → deselect)
+    MIDDLE DRAG pan camera (when no car selected)
 """
 
 import sys
@@ -21,6 +31,7 @@ from track import build_track
 from agent import PopulationManager
 from player import PlayerCar
 from renderer import Renderer
+from camera import Camera
 from ui import LeftPanel, RightPanel, TooltipState, StatsPopup, NNConfigPopup
 
 
@@ -36,16 +47,31 @@ def _make_player(track, params):
     return pc
 
 
+def _camera_target(pop, player):
+    """Determine the object the camera should follow (highest priority first)."""
+    if player is not None and player.enabled:
+        return player
+    # Selected AI agent (if alive)
+    sel = getattr(_camera_target, "_sel_agent", None)
+    if sel is not None and sel.car.alive:
+        return sel
+    # Best alive agent
+    best = pop.best_agent
+    if best is not None and best.car.alive:
+        return best
+    return None
+
+
 def main():
     pygame.init()
-    pygame.display.set_caption("Racing AI — Neuroevolution v3")
+    pygame.display.set_caption("Racing AI — Neuroevolution v4")
     screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
     clock  = pygame.time.Clock()
 
     # ── Initial state ─────────────────────────────────────────────────────────
-    left    = LeftPanel()
-    right   = RightPanel()
-    tooltip = TooltipState()
+    left     = LeftPanel()
+    right    = RightPanel()
+    tooltip  = TooltipState()
     renderer = Renderer(screen)
 
     params     = left.params
@@ -54,28 +80,32 @@ def main():
     pop        = _make_pop(track, params)
     player     = _make_player(track, params)
 
+    # Camera — initialised to show track start area
+    cam = Camera(track.world_w, track.world_h)
+    cam.snap_to_track_start(track)
+
     paused           = False
     step_counter     = 0
-    selected_idx     = -1       # AI agent index; -1 = none
-    selected_player  = False    # player car selected
-
+    selected_idx     = -1
+    selected_player  = False
     player_enabled   = False
     show_track_lines = True
 
-    stats_popup  = StatsPopup()
-    nn_popup     = NNConfigPopup(left.nn_config)
-    show_stats   = False
-    show_nnconf  = False
+    stats_popup = StatsPopup()
+    nn_popup    = NNConfigPopup(left.nn_config)
+    show_stats  = False
+    show_nnconf = False
 
+    # ── Main loop ─────────────────────────────────────────────────────────────
     while True:
-        clock.tick(FPS)
+        dt_frame = clock.tick(FPS) / 1000.0   # seconds since last frame
 
         # ── Events ────────────────────────────────────────────────────────────
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
 
-            # Popups absorb events when visible
+            # Popups absorb all events when visible
             if show_stats:
                 if stats_popup.handle_event(event):
                     show_stats = False
@@ -97,14 +127,22 @@ def main():
                     renderer.show_rays = not renderer.show_rays
                 elif event.key == pygame.K_k:
                     pop.kill_all()
-                # Player car keys
                 player.handle_keydown(event.key)
 
-            # Click selection (track area only)
+            # Middle-mouse camera drag
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 2:
+                cam.begin_drag(event.pos)
+            if event.type == pygame.MOUSEMOTION:
+                cam.update_drag(event.pos)
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 2:
+                cam.end_drag()
+
+            # Left-click selection (track area only)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = event.pos
                 if TRACK_AREA_X <= mx < TRACK_AREA_X + TRACK_AREA_W:
-                    ai_idx, hit_player = renderer.hit_test(mx, my, pop, player)
+                    ai_idx, hit_player = renderer.hit_test(mx, my, pop,
+                                                           player, cam)
                     if hit_player:
                         selected_player = not selected_player
                         selected_idx    = -1
@@ -131,9 +169,12 @@ def main():
 
             if ev["track_changed"]:
                 track_name = left.track_name
-                track = build_track(track_name)
+                track      = build_track(track_name)
                 pop.change_track(track)
                 renderer.prerender_track(track)
+                # Reset camera for new track world size
+                cam = Camera(track.world_w, track.world_h)
+                cam.snap_to_track_start(track)
                 if player.enabled:
                     from track import get_start_pose
                     x, y, h = get_start_pose(track)
@@ -145,10 +186,11 @@ def main():
                 pop.kill_all()
 
             if ev["restart"]:
-                params = left.params   # pick up latest nn_hidden_sizes
+                params = left.params
                 pop.restart(params)
                 player = _make_player(track, params)
                 player.enabled = player_enabled
+                cam.snap_to_track_start(track)
                 selected_idx    = -1
                 selected_player = False
                 step_counter    = 0
@@ -173,13 +215,27 @@ def main():
                 show_track_lines = not show_track_lines
                 renderer.show_track_lines = show_track_lines
 
+        # ── Camera target ─────────────────────────────────────────────────────
+        if 0 <= selected_idx < len(pop.agents):
+            cam.target = pop.agents[selected_idx]
+        elif selected_player and player.enabled:
+            cam.target = player
+        elif player.enabled:
+            cam.target = player
+        else:
+            # Follow best alive agent automatically
+            best = pop.best_agent
+            cam.target = best if (best and best.car.alive) else None
+
+        cam.update(dt_frame)
+
         # ── Simulation ────────────────────────────────────────────────────────
         if not paused:
-            sim_speed  = left.sim_speed
-            dt_phys    = 1.0 / FPS
-            max_steps  = pop.max_laps * 3600   # 60 s/lap safety cap
+            sim_speed = left.sim_speed
+            dt_phys   = 1.0 / FPS
+            max_steps = pop.max_laps * 3600
 
-            keys = pygame.key.get_pressed()   # snapshot for player
+            keys = pygame.key.get_pressed()
 
             for _ in range(sim_speed):
                 alive = pop.step(dt_phys)
@@ -196,9 +252,9 @@ def main():
 
         # ── Render ────────────────────────────────────────────────────────────
         screen.fill((14, 15, 22))
-        renderer.selected_idx    = selected_idx
+        renderer.selected_idx     = selected_idx
         renderer.show_track_lines = show_track_lines
-        renderer.draw(track, pop, clock.get_fps(), player)
+        renderer.draw(track, pop, clock.get_fps(), player, cam)
         left.draw(screen, player_enabled, show_track_lines)
         right.draw(screen, pop, step_counter / FPS,
                    selected_idx=selected_idx,

@@ -70,6 +70,7 @@ class Car:
         self.omega    = 0.0
         self.gear     = 1
         self.rpm      = 2000.0
+        self.delta    = 0.0    # current front-wheel steering angle (rad)
         self.alive    = True
         self.stuck_timer  = 0.0
         self.distance_px  = 0.0
@@ -118,6 +119,7 @@ class Car:
         v_kmh     = abs(self.vx) * 3.6
         dmax_deg  = max(4.0, 25.0 - 0.105 * v_kmh)
         delta     = steer * math.radians(dmax_deg)
+        self.delta = delta   # store for renderer (wheel steer angle)
 
         if auto_gear:
             self._auto_shift()
