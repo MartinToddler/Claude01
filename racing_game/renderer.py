@@ -105,14 +105,28 @@ class Renderer:
         surf = (self._track_surf_full if self.show_track_lines
                 else self._track_surf_bare)
 
-        # Blit visible viewport portion of the (possibly large) track surface
+        # Blit visible viewport portion of the (possibly large) track surface.
+        # When zoom != 1, scale the src_rect portion to fill the track area.
+        zoom  = cam.zoom if cam else 1.0
+        vp_w  = int(TRACK_AREA_W / zoom)
+        vp_h  = int(TRACK_AREA_H / zoom)
         cam_x = int(cam.world_x) if cam else 0
         cam_y = int(cam.world_y) if cam else 0
-        src_w = min(TRACK_AREA_W, surf.get_width()  - cam_x)
-        src_h = min(TRACK_AREA_H, surf.get_height() - cam_y)
+
+        src_x = max(0, cam_x)
+        src_y = max(0, cam_y)
+        src_w = min(vp_w, surf.get_width()  - src_x)
+        src_h = min(vp_h, surf.get_height() - src_y)
+
         if src_w > 0 and src_h > 0:
-            src_rect = pygame.Rect(cam_x, cam_y, src_w, src_h)
-            self.surface.blit(surf, (TRACK_AREA_X, 0), area=src_rect)
+            src_rect = pygame.Rect(src_x, src_y, src_w, src_h)
+            if zoom == 1.0:
+                self.surface.blit(surf, (TRACK_AREA_X, 0), area=src_rect)
+            else:
+                # Scale the cropped world portion to fill the full track area
+                chunk = surf.subsurface(src_rect)
+                scaled = pygame.transform.scale(chunk, (TRACK_AREA_W, TRACK_AREA_H))
+                self.surface.blit(scaled, (TRACK_AREA_X, 0))
 
         self._draw_agents(pop, cam)
 
@@ -342,12 +356,12 @@ class Renderer:
             my = int(player.car.y * scale_y)
             pygame.draw.circle(mm, C["player"], (mx, my), 3)
 
-        # Viewport rectangle
+        # Viewport rectangle (accounts for zoom)
         vx  = int(cam.world_x * scale_x)
         vy  = int(cam.world_y * scale_y)
-        vw  = int(TRACK_AREA_W * scale_x)
-        vh  = int(TRACK_AREA_H * scale_y)
-        pygame.draw.rect(mm, (200, 200, 255, 150), (vx, vy, vw, vh), 1)
+        vw  = int(cam.vp_w * scale_x)
+        vh  = int(cam.vp_h * scale_y)
+        pygame.draw.rect(mm, (200, 200, 255, 150), (vx, vy, max(2, vw), max(2, vh)), 1)
 
         pygame.draw.rect(mm, (40, 50, 80, 220), (0, 0, MM_W, MM_H), 1)
         self.surface.blit(mm, (MM_X, MM_Y))

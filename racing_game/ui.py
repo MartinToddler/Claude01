@@ -423,6 +423,8 @@ class LeftPanel:
                                   tip_id="player_car")
         self.btn_lines   = Button("Track Lines: ON",   C["accent"], h=22,
                                   tip_id="track_lines")
+        self.btn_follow  = Button("Follow: ON",  C["good"], h=22)
+        self.btn_follow.active = True
         self.btn_kill    = Button("Kill All → Next Gen", C["bad"], h=24)
         self.btn_restart = Button("Restart Simulation",  C["warn"], h=24)
         self.btn_stats   = Button("Stats ▶",   C["accent"], h=22)
@@ -512,6 +514,8 @@ class LeftPanel:
         self.btn_player.set_rect(x,         y, bw2, 24)
         self.btn_lines.set_rect( x + bw2+4, y, bw2, 22)
         y += 30
+        self.btn_follow.set_rect(x, y, w, 22)
+        y += 28
         self.btn_kill.set_rect(   x,         y, bw2, 24)
         self.btn_restart.set_rect(x + bw2+4, y, bw2, 24)
         y += 30
@@ -587,6 +591,7 @@ class LeftPanel:
 
         self.btn_player.draw(surf)
         self.btn_lines.draw(surf)
+        self.btn_follow.draw(surf)
         self.btn_kill.draw(surf)
         self.btn_restart.draw(surf)
         self.btn_stats.draw(surf)
@@ -603,7 +608,7 @@ class LeftPanel:
         result = {k: False for k in (
             "params_changed", "track_changed", "speed_changed",
             "kill_all", "restart", "toggle_player", "toggle_lines",
-            "toggle_stats", "toggle_nnconf"
+            "toggle_stats", "toggle_nnconf", "toggle_follow"
         )}
 
         # Performance sliders
@@ -668,6 +673,7 @@ class LeftPanel:
             if self.btn_lines.hit(pos):   result["toggle_lines"]   = True
             if self.btn_stats.hit(pos):   result["toggle_stats"]   = True
             if self.btn_nnconf.hit(pos):  result["toggle_nnconf"]  = True
+            if self.btn_follow.hit(pos):  result["toggle_follow"]  = True
 
         return result
 

@@ -18,10 +18,12 @@ Keyboard shortcuts:
     ↑↓←→        player car throttle / steer (when enabled)
     A / Z       player shift up / down (manual gearbox)
     Q           toggle player auto / manual gearbox
+    W S A D     pan camera (when Follow is OFF, or to temporarily override)
+    = / +       zoom in
+    -           zoom out
     ESC         quit
     CLICK       select AI car or player car for detailed telemetry
                 (click selected again or empty area → deselect)
-    MIDDLE DRAG pan camera (when no car selected)
 """
 
 import sys
@@ -127,15 +129,13 @@ def main():
                     renderer.show_rays = not renderer.show_rays
                 elif event.key == pygame.K_k:
                     pop.kill_all()
+                # Zoom keys (= or + to zoom in, - to zoom out)
+                elif event.key in (pygame.K_EQUALS, pygame.K_PLUS,
+                                   pygame.K_KP_PLUS):
+                    cam.zoom_in()
+                elif event.key in (pygame.K_MINUS, pygame.K_KP_MINUS):
+                    cam.zoom_out()
                 player.handle_keydown(event.key)
-
-            # Middle-mouse camera drag
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 2:
-                cam.begin_drag(event.pos)
-            if event.type == pygame.MOUSEMOTION:
-                cam.update_drag(event.pos)
-            if event.type == pygame.MOUSEBUTTONUP and event.button == 2:
-                cam.end_drag()
 
             # Left-click selection (track area only)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -215,6 +215,12 @@ def main():
                 show_track_lines = not show_track_lines
                 renderer.show_track_lines = show_track_lines
 
+            if ev["toggle_follow"]:
+                cam.follow = not cam.follow
+                left.btn_follow.active = cam.follow
+                left.btn_follow.label  = (
+                    "Follow: ON" if cam.follow else "Follow: OFF")
+
         # ── Camera target ─────────────────────────────────────────────────────
         if 0 <= selected_idx < len(pop.agents):
             cam.target = pop.agents[selected_idx]
@@ -223,11 +229,11 @@ def main():
         elif player.enabled:
             cam.target = player
         else:
-            # Follow best alive agent automatically
             best = pop.best_agent
             cam.target = best if (best and best.car.alive) else None
 
-        cam.update(dt_frame)
+        keys_snap = pygame.key.get_pressed()
+        cam.update(dt_frame, keys_snap)
 
         # ── Simulation ────────────────────────────────────────────────────────
         if not paused:
